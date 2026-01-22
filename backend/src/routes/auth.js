@@ -1,0 +1,99 @@
+import express from "express";
+import { z } from "zod";
+import prisma from "../lib/prisma.js";
+import { hashPassword, verifyPassword } from "../utils/password.js";
+import { signToken } from "../utils/jwt.js";
+
+const router = express.Router();
+
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  fullName: z.string().min(1).optional()
+});
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6)
+});
+
+async function ensureRoles() {
+  await prisma.role.upsert({
+    where: { name: "admin" },
+    update: {},
+    create: { name: "admin" }
+  });
+  await prisma.role.upsert({
+    where: { name: "staff" },
+    update: {},
+    create: { name: "staff" }
+  });
+}
+
+async function getUserRoles(userId) {
+  const roles = await prisma.userRole.findMany({
+    where: { userId },
+    include: { role: true }
+  });
+  return roles.map((r) => r.role.name);
+}
+
+router.post("/register", async (req, res) => {
+  const parse = registerSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+
+  const { email, password, fullName } = parse.data;
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return res.status(409).json({ error: "Email already in use" });
+  }
+
+  await ensureRoles();
+  const passwordHash = await hashPassword(password);
+  const user = await prisma.user.create({
+    data: { email, passwordHash, fullName }
+  });
+
+  const adminRole = await prisma.role.findUnique({ where: { name: "admin" } });
+  await prisma.userRole.create({
+    data: { userId: user.id, roleId: adminRole.id }
+  });
+
+  const roles = await getUserRoles(user.id);
+  const token = signToken({ id: user.id, email: user.email, roles });
+
+  return res.json({
+    token,
+    user: { id: user.id, email: user.email, fullName: user.fullName, roles }
+  });
+});
+
+router.post("/login", async (req, res) => {
+  const parse = loginSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+
+  const { email, password } = parse.data;
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const roles = await getUserRoles(user.id);
+  const token = signToken({ id: user.id, email: user.email, roles });
+
+  return res.json({
+    token,
+    user: { id: user.id, email: user.email, fullName: user.fullName, roles }
+  });
+});
+
+export default router;
