@@ -28,20 +28,20 @@
           <div class="subtitle">Joined Players</div>
           <strong>{{ session?.name }}</strong>
         </div>
-        <span class="badge neutral">{{ joinedPlayers.length }}</span>
+        <span class="badge neutral">{{ visibleJoinedPlayers.length }}</span>
       </div>
       <div v-if="playersError" class="notice">{{ playersError }}</div>
       <div v-else-if="playersLoading" class="subtitle">Loading...</div>
-      <div v-else-if="joinedPlayers.length === 0" class="subtitle">No players yet.</div>
+      <div v-else-if="visibleJoinedPlayers.length === 0" class="subtitle">No players yet.</div>
       <div v-else class="stack join-player-list">
         <div
-          v-for="(sp, idx) in joinedPlayers"
+          v-for="sp in joinedPlayersWithOrder"
           :key="sp.playerId"
           class="join-player-card"
-          :class="{ 'new-player': sp.isNewPlayer }"
+          :class="{ 'new-player': sp.isNewPlayer, 'over-limit': sp.overLimit }"
         >
           <div class="join-player-row">
-            <span class="join-player-order">#{{ idx + 1 }}</span>
+            <span class="join-player-order">{{ sp.orderLabel }}</span>
             <div>
               <div class="join-player-name">
                 <strong>{{ sp.player.nickname || sp.player.fullName }}</strong>
@@ -58,7 +58,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api } from "../api.js";
 
@@ -75,6 +75,33 @@ const showPlayers = ref(false);
 const joinedPlayers = ref([]);
 const playersLoading = ref(false);
 const playersError = ref("");
+const regularJoinLimit = ref(0);
+const newJoinerLimit = ref(0);
+
+const visibleJoinedPlayers = computed(() =>
+  joinedPlayers.value.filter((sp) => sp.status !== "done")
+);
+
+const joinedPlayersWithOrder = computed(() => {
+  let regularIndex = 0;
+  let newIndex = 0;
+  return visibleJoinedPlayers.value.map((sp) => {
+    if (sp.isNewPlayer) {
+      newIndex += 1;
+      return {
+        ...sp,
+        orderLabel: `n${newIndex}`,
+        overLimit: newJoinerLimit.value > 0 && newIndex > newJoinerLimit.value
+      };
+    }
+    regularIndex += 1;
+    return {
+      ...sp,
+      orderLabel: `r${regularIndex}`,
+      overLimit: regularJoinLimit.value > 0 && regularIndex > regularJoinLimit.value
+    };
+  });
+});
 
 async function load() {
   try {
@@ -118,9 +145,13 @@ async function openPlayers() {
   try {
     const data = await api.publicSessionInvitePlayers(route.params.token);
     joinedPlayers.value = data.players || [];
+    regularJoinLimit.value = Number(data.session?.regularJoinLimit || 0);
+    newJoinerLimit.value = Number(data.session?.newJoinerLimit || 0);
   } catch (err) {
     playersError.value = err.message || "Unable to load players";
     joinedPlayers.value = [];
+    regularJoinLimit.value = 0;
+    newJoinerLimit.value = 0;
   } finally {
     playersLoading.value = false;
   }

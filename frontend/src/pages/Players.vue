@@ -13,7 +13,7 @@
       </button>
     </div>
 
-    <div v-if="activeTab === 'players'" class="card stack live-surface">
+    <div v-if="activeTab === 'players'" class="card stack live-surface" :class="{ 'over-limit': joinLimitExceeded }">
       <div class="section-title">Player Name &amp; Skill Level</div>
       <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!session" />
       <div class="chip-row">
@@ -63,7 +63,8 @@
             :class="{
               selected: selectedIds.includes(player.id),
               disabled: isPlaying(player),
-              'new-player': isNewPlayer(player)
+              'new-player': isNewPlayer(player),
+              'over-limit': isOverJoinLimit(player.id)
             }"
             @click="toggleSelect(player)"
           >
@@ -81,19 +82,20 @@
             <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
           </div>
           <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
-          <div class="subtitle join-order-line">Join order: #{{ joinOrder(player.id) }}</div>
+          <div class="subtitle join-order-line">Join order: {{ joinOrderLabel(player.id) }}</div>
         </div>
         </div>
 
         <div class="inline-actions">
-          <button class="button" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
-          <button class="button ghost" :disabled="selectedIds.length === 0" @click="clearSelection">Clear</button>
-          <button class="button ghost danger" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
+          <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
+          <button class="button secondary button-compact" :disabled="selectedIds.length === 0" @click="markPresent">Mark Present</button>
+          <button class="button ghost danger button-compact" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
             Remove
           </button>
         </div>
         <div v-if="queueError" class="notice">{{ queueError }}</div>
         <div v-if="removeError" class="notice">{{ removeError }}</div>
+        <div v-if="presentError" class="notice">{{ presentError }}</div>
       </template>
     </div>
 
@@ -216,6 +218,16 @@
         </div>
       </div>
     </div>
+    <div v-if="showCancelConfirm" class="modal-backdrop">
+      <div class="modal-card">
+        <h3>Cancel match</h3>
+        <div class="subtitle">Are you sure you want to cancel this match?</div>
+        <div class="grid two">
+          <button class="button danger" @click="confirmCancelMatch">Cancel match</button>
+          <button class="button ghost" @click="closeCancelConfirm">Keep</button>
+        </div>
+      </div>
+    </div>
     <div v-if="showRemoveConfirm" class="modal-backdrop">
       <div class="modal-card">
         <h3>Remove players</h3>
@@ -247,6 +259,7 @@ const gameType = ref("doubles");
 const selectedIds = ref([]);
 const queueError = ref("");
 const removeError = ref("");
+const presentError = ref("");
 const queueShareLink = ref("");
 const historySearch = ref("");
 const showEditPlayer = ref(false);
@@ -258,6 +271,8 @@ const showDuplicateWarning = ref(false);
 const duplicateWarningNames = ref([]);
 const showRemoveConfirm = ref(false);
 const removeConfirmNames = ref([]);
+const showCancelConfirm = ref(false);
+const cancelMatchTarget = ref(null);
 const nowTick = ref(Date.now());
 let timerId = null;
 
@@ -271,7 +286,7 @@ const sessionPlayerMap = computed(() => {
   return map;
 });
 
-const joinOrderMap = computed(() => {
+const overallJoinOrderMap = computed(() => {
   const sorted = sessionPlayers.value
     .filter((sp) => sp.status !== "done")
     .sort((a, b) => {
@@ -282,6 +297,46 @@ const joinOrderMap = computed(() => {
   const map = new Map();
   sorted.forEach((sp, idx) => map.set(sp.playerId, idx + 1));
   return map;
+});
+
+const regularJoinOrderMap = computed(() => {
+  const sorted = sessionPlayers.value
+    .filter((sp) => sp.status !== "done" && !sp.isNewPlayer)
+    .sort((a, b) => {
+      const aTime = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+      const bTime = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  const map = new Map();
+  sorted.forEach((sp, idx) => map.set(sp.playerId, idx + 1));
+  return map;
+});
+
+const newJoinerOrderMap = computed(() => {
+  const sorted = sessionPlayers.value
+    .filter((sp) => sp.status !== "done" && sp.isNewPlayer)
+    .sort((a, b) => {
+      const aTime = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+      const bTime = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  const map = new Map();
+  sorted.forEach((sp, idx) => map.set(sp.playerId, idx + 1));
+  return map;
+});
+
+const regularLimit = computed(() => Number(session.value?.regularJoinLimit || 0));
+const newJoinerLimit = computed(() => Number(session.value?.newJoinerLimit || 0));
+const regularJoinedCount = computed(
+  () => sessionPlayers.value.filter((sp) => sp.status !== "done" && !sp.isNewPlayer).length
+);
+const newJoinedCount = computed(
+  () => sessionPlayers.value.filter((sp) => sp.status !== "done" && sp.isNewPlayer).length
+);
+const joinLimitExceeded = computed(() => {
+  const regularExceeded = regularLimit.value > 0 && regularJoinedCount.value > regularLimit.value;
+  const newExceeded = newJoinerLimit.value > 0 && newJoinedCount.value > newJoinerLimit.value;
+  return regularExceeded || newExceeded;
 });
 
 const playingIds = computed(() => {
@@ -355,7 +410,17 @@ const queueMatches = computed(() => {
 });
 
 const availableCourts = computed(() => {
-  return (session.value?.courtSessions || []).filter((c) => c.status === "available");
+  return (session.value?.courtSessions || [])
+    .filter((c) => c.status === "available")
+    .slice()
+    .sort((a, b) => {
+      const aName = a.court?.name || a.name || "";
+      const bName = b.court?.name || b.name || "";
+      const aNum = Number(aName.match(/\d+/)?.[0] || Number.POSITIVE_INFINITY);
+      const bNum = Number(bName.match(/\d+/)?.[0] || Number.POSITIVE_INFINITY);
+      if (aNum !== bNum) return aNum - bNum;
+      return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: "base" });
+    });
 });
 
 function isPlaying(player) {
@@ -374,8 +439,28 @@ function gamesPlayed(playerId) {
   return sessionPlayerMap.value.get(playerId)?.gamesPlayed || 0;
 }
 
-function joinOrder(playerId) {
-  return joinOrderMap.value.get(playerId) || "—";
+function joinOrderLabel(playerId) {
+  if (sessionPlayerMap.value.get(playerId)?.isNewPlayer) {
+    const order = newJoinerOrderMap.value.get(playerId);
+    return order ? `n${order}` : "—";
+  }
+  const order = regularJoinOrderMap.value.get(playerId);
+  return order ? `r${order}` : "—";
+}
+
+function isOverJoinLimit(playerId) {
+  const sp = sessionPlayerMap.value.get(playerId);
+  if (!sp) return false;
+  if (sp.isNewPlayer) {
+    const limit = newJoinerLimit.value;
+    if (!limit) return false;
+    const order = newJoinerOrderMap.value.get(playerId);
+    return order ? order > limit : false;
+  }
+  const limit = regularLimit.value;
+  if (!limit) return false;
+  const order = regularJoinOrderMap.value.get(playerId);
+  return order ? order > limit : false;
 }
 
 function statusLabel(player) {
@@ -385,6 +470,7 @@ function statusLabel(player) {
   if (!sp) return "—";
   if (sp.status === "away") return "Away";
   if (sp.status === "done") return "Done";
+  if (sp.status === "present") return "Present";
   if (sp.status === "checked_in") {
     if (sp.lastPlayedAt) {
       const elapsed = idleElapsed(sp);
@@ -402,6 +488,7 @@ function statusClass(player) {
   if (!sp) return "neutral";
   if (sp.status === "away") return "away";
   if (sp.status === "done") return "done";
+  if (sp.status === "present") return "present";
   if (sp.status === "checked_in") {
     return sp.lastPlayedAt ? "idle" : "checkedin";
   }
@@ -476,7 +563,7 @@ async function ensureCheckedIn(playerIds) {
   if (!session.value) return;
   for (const playerId of playerIds) {
     const sp = sessionPlayerMap.value.get(playerId);
-    if (!sp || sp.status !== "checked_in") {
+    if (!sp || (sp.status !== "checked_in" && sp.status !== "present")) {
       await api.checkinPlayer(playerId, { sessionId: session.value.id });
     }
   }
@@ -486,6 +573,7 @@ async function addToQueue() {
   if (!session.value) return;
   queueError.value = "";
   removeError.value = "";
+  presentError.value = "";
   if (selectedIds.value.length !== selectionLimit.value) {
     queueError.value = `Select ${selectionLimit.value} players.`;
     return;
@@ -499,6 +587,19 @@ async function addToQueue() {
     await enqueueSelectedPlayers();
   } catch (err) {
     queueError.value = err.message || "Unable to add to queue";
+  }
+}
+
+async function markPresent() {
+  if (!session.value || selectedIds.value.length === 0) return;
+  presentError.value = "";
+  try {
+    for (const playerId of selectedIds.value) {
+      await api.presentPlayer(playerId, { sessionId: session.value.id });
+    }
+    await load();
+  } catch (err) {
+    presentError.value = err.message || "Unable to mark present";
   }
 }
 
@@ -521,10 +622,23 @@ async function assignMatch(match, court) {
 
 async function cancelQueuedMatch(match) {
   if (!session.value) return;
-  for (const entryId of match.entryIds) {
+  cancelMatchTarget.value = match;
+  showCancelConfirm.value = true;
+}
+
+async function confirmCancelMatch() {
+  if (!session.value || !cancelMatchTarget.value) return;
+  for (const entryId of cancelMatchTarget.value.entryIds) {
     await api.dequeue(session.value.id, { entryId });
   }
+  cancelMatchTarget.value = null;
+  showCancelConfirm.value = false;
   await load();
+}
+
+function closeCancelConfirm() {
+  showCancelConfirm.value = false;
+  cancelMatchTarget.value = null;
 }
 
 async function createQueueShareLink() {

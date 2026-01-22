@@ -23,6 +23,10 @@ const checkinSchema = z.object({
   sessionId: z.string().uuid()
 });
 
+const presentSchema = z.object({
+  sessionId: z.string().uuid()
+});
+
 const checkoutSchema = z.object({
   sessionId: z.string().uuid(),
   status: z.enum(["away", "done"])
@@ -67,6 +71,24 @@ router.post("/:id/checkin", requireAuth, requireRole(["admin", "staff"]), async 
       sessionId,
       playerId: req.params.id,
       status: "checked_in"
+    }
+  });
+  res.json(sessionPlayer);
+});
+
+router.post("/:id/present", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const parse = presentSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  const { sessionId } = parse.data;
+  const sessionPlayer = await prisma.sessionPlayer.upsert({
+    where: { sessionId_playerId: { sessionId, playerId: req.params.id } },
+    update: { status: "present" },
+    create: {
+      sessionId,
+      playerId: req.params.id,
+      status: "present"
     }
   });
   res.json(sessionPlayer);

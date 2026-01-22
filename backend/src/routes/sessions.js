@@ -11,6 +11,8 @@ const createSchema = z.object({
   endsAt: z.string().datetime().optional(),
   feeMode: z.enum(["flat", "per_game"]).default("flat"),
   feeAmount: z.number().nonnegative().default(0),
+  regularJoinLimit: z.number().int().nonnegative().default(0),
+  newJoinerLimit: z.number().int().nonnegative().default(0),
   returnToQueue: z.boolean().default(true),
   announcements: z.string().optional()
 });
@@ -33,6 +35,8 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       endsAt: data.endsAt ? new Date(data.endsAt) : null,
       feeMode: data.feeMode,
       feeAmount: data.feeAmount,
+      regularJoinLimit: data.regularJoinLimit,
+      newJoinerLimit: data.newJoinerLimit,
       returnToQueue: data.returnToQueue,
       announcements: data.announcements,
       status: "draft",

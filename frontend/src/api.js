@@ -40,6 +40,7 @@ export const api = {
   createPlayer: (payload) => request("/players", { method: "POST", body: JSON.stringify(payload) }),
   updatePlayer: (id, payload) => request(`/players/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   checkinPlayer: (id, payload) => request(`/players/${id}/checkin`, { method: "POST", body: JSON.stringify(payload) }),
+  presentPlayer: (id, payload) => request(`/players/${id}/present`, { method: "POST", body: JSON.stringify(payload) }),
   checkoutPlayer: (id, payload) => request(`/players/${id}/checkout`, { method: "POST", body: JSON.stringify(payload) }),
   getQueue: (sessionId) => request(`/queue/${sessionId}`),
   enqueue: (sessionId, payload) => request(`/queue/${sessionId}/enqueue`, { method: "POST", body: JSON.stringify(payload) }),

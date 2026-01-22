@@ -890,6 +890,12 @@ a {
   box-shadow: 0 18px 32px rgba(15, 157, 138, 0.12);
 }
 
+.over-limit {
+  background: #f0f0f0;
+  border-color: #d2d2d2;
+  box-shadow: none;
+}
+
 .queue-match-card {
   border: 1px solid rgba(214, 225, 232, 0.9);
   border-radius: var(--radius-sm);
@@ -1008,15 +1014,20 @@ a {
 
 .player-card.selected {
   border-color: rgba(15, 157, 138, 0.5);
-  border-left: 6px solid rgba(242, 163, 58, 0.9);
+  border-left: 6px solid #111;
   background: linear-gradient(135deg, rgba(15, 157, 138, 0.12), rgba(242, 163, 58, 0.12));
   box-shadow: 0 10px 18px rgba(15, 157, 138, 0.12);
   padding-left: 6px;
 }
 
 .player-card.new-player {
-  border-color: rgba(94, 156, 255, 0.45);
-  background: linear-gradient(135deg, rgba(94, 156, 255, 0.16), rgba(15, 157, 138, 0.08));
+  border-color: rgba(242, 163, 58, 0.6);
+  background: linear-gradient(135deg, rgba(242, 163, 58, 0.22), rgba(255, 228, 196, 0.3));
+}
+
+.player-card.over-limit {
+  border-color: #bdbdbd;
+  background: #dedede;
 }
 
 .player-card.disabled {
@@ -1346,6 +1357,11 @@ a {
   color: var(--ink-soft);
 }
 
+.status-pill.present {
+  background: rgba(94, 156, 255, 0.2);
+  color: #1e4f8f;
+}
+
 .status-pill.idle {
   background: rgba(15, 157, 138, 0.16);
   color: var(--accent);
@@ -1417,6 +1433,35 @@ a {
   gap: 12px;
 }
 
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-inline .input {
+  max-width: 120px;
+}
+
+.join-limits-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
 .session-compact {
   padding: 12px;
   gap: 10px;
@@ -1424,6 +1469,24 @@ a {
 
 .session-compact .subtitle {
   font-size: 12px;
+}
+
+.session-create {
+  padding: 10px;
+}
+
+.session-create .field {
+  gap: 4px;
+}
+
+.session-create .input {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.session-create .button {
+  padding: 10px 16px;
+  font-size: 13px;
 }
 
 .session-actions {
@@ -1467,8 +1530,13 @@ a {
 }
 
 .join-player-card.new-player {
-  border-color: rgba(94, 156, 255, 0.5);
-  background: linear-gradient(135deg, rgba(94, 156, 255, 0.16), rgba(15, 157, 138, 0.08));
+  border-color: rgba(242, 163, 58, 0.6);
+  background: linear-gradient(135deg, rgba(242, 163, 58, 0.22), rgba(255, 228, 196, 0.3));
+}
+
+.join-player-card.over-limit {
+  border-color: #bdbdbd;
+  background: #dedede;
 }
 
 .join-player-row {
@@ -1492,8 +1560,8 @@ a {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: rgba(94, 156, 255, 0.18);
-  color: #1e4f8f;
+  background: rgba(242, 163, 58, 0.28);
+  color: #8a5200;
 }
 
 .join-player-order {

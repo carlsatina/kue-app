@@ -1,6 +1,6 @@
 <template>
   <div class="stack">
-    <div class="card stack session-compact">
+    <div class="card stack session-compact" :class="{ 'session-create': !session }">
       <div class="kpi">
         <div>
           <div class="subtitle">Active Session</div>
@@ -11,21 +11,33 @@
         </span>
       </div>
       <div v-if="!session" class="stack">
-        <input class="input" v-model="newSessionName" placeholder="Session name" />
-        <div class="grid two">
-          <input class="input" v-model.number="feeAmount" type="number" placeholder="Fee amount" />
-          <select class="input" v-model="feeMode">
-            <option value="flat">Flat fee</option>
-            <option value="per_game">Per game</option>
-          </select>
+        <div class="field">
+          <label class="field-label">Session name</label>
+          <input class="input" v-model="newSessionName" />
+        </div>
+        <div class="field">
+          <label class="field-label">Fee amount</label>
+          <input class="input" v-model.number="feeAmount" type="number" min="0" />
+        </div>
+        <div class="join-limits-row">
+          <div class="field field-inline">
+            <label class="field-label">Regular</label>
+            <input class="input" type="number" min="0" v-model.number="regularJoinLimit" />
+          </div>
+          <div class="field field-inline">
+            <label class="field-label">New joiner</label>
+            <input class="input" type="number" min="0" v-model.number="newJoinerLimit" />
+          </div>
         </div>
         <button class="button" @click="createSession">Create Session</button>
       </div>
-      <div v-else class="session-actions">
-        <button class="button button-compact" @click="refresh">Refresh</button>
-        <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
-        <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
-        <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
+      <div v-else class="stack">
+        <div class="session-actions">
+          <button class="button button-compact" @click="refresh">Refresh</button>
+          <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
+          <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
+          <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
+        </div>
       </div>
     </div>
 
@@ -179,12 +191,9 @@
     <div class="modal-card">
       <h3>Edit Session Fee</h3>
       <div class="subtitle">{{ session?.name }}</div>
-      <div class="grid two">
-        <input class="input" v-model.number="editFeeAmount" type="number" min="0" placeholder="Fee amount" />
-        <select class="input" v-model="editFeeMode">
-          <option value="flat">Flat fee</option>
-          <option value="per_game">Per game</option>
-        </select>
+      <div class="field">
+        <label class="field-label">Fee amount</label>
+        <input class="input" v-model.number="editFeeAmount" type="number" min="0" />
       </div>
       <div v-if="editFeeError" class="notice">{{ editFeeError }}</div>
       <div class="grid two">
@@ -243,7 +252,6 @@ const session = ref(null);
 const courts = ref([]);
 const error = ref("");
 const newSessionName = ref("Evening Open Play");
-const feeMode = ref("flat");
 const feeAmount = ref(100);
 const showAddCourt = ref(false);
 const newCourtName = ref("");
@@ -275,9 +283,10 @@ const showReopenConfirm = ref(false);
 const reopenTarget = ref(null);
 const showPastSessions = ref(false);
 const showEditFee = ref(false);
-const editFeeMode = ref("flat");
 const editFeeAmount = ref(0);
 const editFeeError = ref("");
+const regularJoinLimit = ref(0);
+const newJoinerLimit = ref(0);
 
 async function refresh() {
   try {
@@ -286,6 +295,8 @@ async function refresh() {
       session.value = null;
       courts.value = [];
       pastSessions.value = await api.listSessions("closed");
+      regularJoinLimit.value = 0;
+      newJoinerLimit.value = 0;
       return;
     }
     let courtSessions = sessionData.courtSessions || [];
@@ -312,6 +323,8 @@ async function refresh() {
     session.value = null;
     courts.value = [];
     pastSessions.value = await api.listSessions("closed");
+    regularJoinLimit.value = 0;
+    newJoinerLimit.value = 0;
   }
 }
 
@@ -321,7 +334,6 @@ function togglePastSessions() {
 
 function openEditFee() {
   if (!session.value || session.value.status !== "open") return;
-  editFeeMode.value = session.value.feeMode || "flat";
   editFeeAmount.value = Number(session.value.feeAmount || 0);
   editFeeError.value = "";
   showEditFee.value = true;
@@ -337,7 +349,7 @@ async function saveEditFee() {
   editFeeError.value = "";
   try {
     await api.updateSessionFee(session.value.id, {
-      feeMode: editFeeMode.value,
+      feeMode: "flat",
       feeAmount: Number(editFeeAmount.value)
     });
     showEditFee.value = false;
@@ -350,8 +362,10 @@ async function saveEditFee() {
 async function createSession() {
   const created = await api.createSession({
     name: newSessionName.value,
-    feeMode: feeMode.value,
-    feeAmount: Number(feeAmount.value)
+    feeMode: "flat",
+    feeAmount: Number(feeAmount.value),
+    regularJoinLimit: Math.max(0, Number(regularJoinLimit.value) || 0),
+    newJoinerLimit: Math.max(0, Number(newJoinerLimit.value) || 0)
   });
   session.value = created;
 }

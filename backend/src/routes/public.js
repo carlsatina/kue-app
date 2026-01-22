@@ -226,13 +226,18 @@ router.get("/session-invite/:token/players", async (req, res) => {
   }
 
   const sessionPlayers = await prisma.sessionPlayer.findMany({
-    where: { sessionId: link.session.id },
+    where: { sessionId: link.session.id, status: { not: "done" } },
     include: { player: true },
     orderBy: { checkedInAt: "asc" }
   });
 
   res.json({
-    session: { id: link.session.id, name: link.session.name },
+    session: {
+      id: link.session.id,
+      name: link.session.name,
+      regularJoinLimit: link.session.regularJoinLimit,
+      newJoinerLimit: link.session.newJoinerLimit
+    },
     players: sessionPlayers.map((sp) => ({
       id: sp.id,
       playerId: sp.playerId,

@@ -11,7 +11,7 @@
     <div v-else>
       <div class="kpi">
         <strong>{{ data.player.nickname || data.player.fullName }}</strong>
-        <span class="badge" :class="data.status === 'checked_in' ? '' : 'warning'">
+        <span class="badge" :class="['checked_in', 'present'].includes(data.status) ? '' : 'warning'">
           {{ data.status }}
         </span>
       </div>

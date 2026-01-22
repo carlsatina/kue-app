@@ -33,6 +33,7 @@ enum CourtStatus {
 
 enum PlayerStatus {
   checked_in
+  present
   away
   done
 }
@@ -99,6 +100,8 @@ model Session {
   status         SessionStatus
   feeMode        FeeMode          @map("fee_mode")
   feeAmount      Decimal          @default(0) @map("fee_amount") @db.Decimal(10,2)
+  regularJoinLimit Int            @default(0) @map("regular_join_limit")
+  newJoinerLimit   Int            @default(0) @map("new_joiner_limit")
   returnToQueue  Boolean          @default(true) @map("return_to_queue")
   announcements  String?
   createdBy      String?          @db.Uuid @map("created_by")
