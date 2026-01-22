@@ -92,6 +92,53 @@ router.get("/board/:sessionId", async (req, res) => {
   res.json({ session: { id: session.id, name: session.name }, courts: board });
 });
 
+router.get("/queue/:token/rankings", async (req, res) => {
+  const { token } = req.params;
+  const link = await prisma.sessionShareLink.findUnique({
+    where: { token },
+    include: { session: true }
+  });
+
+  if (!link || link.revokedAt) {
+    return res.status(404).json({ error: "Link not found" });
+  }
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return res.status(410).json({ error: "Link expired" });
+  }
+
+  const session = link.session;
+  const sessionPlayers = await prisma.sessionPlayer.findMany({
+    where: { sessionId: session.id },
+    include: { player: true }
+  });
+
+  const ranked = sessionPlayers
+    .map((sp) => {
+      const winPct = sp.gamesPlayed > 0 ? sp.wins / sp.gamesPlayed : 0;
+      return {
+        playerId: sp.playerId,
+        player: sp.player,
+        gamesPlayed: sp.gamesPlayed,
+        wins: sp.wins,
+        losses: sp.losses,
+        winPct
+      };
+    })
+    .sort((a, b) => {
+      if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.gamesPlayed !== a.gamesPlayed) return b.gamesPlayed - a.gamesPlayed;
+      return (a.player.fullName || "").localeCompare(b.player.fullName || "");
+    })
+    .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+  res.json({
+    session: { id: session.id, name: session.name },
+    totalPlayers: ranked.length,
+    players: ranked
+  });
+});
+
 router.get("/queue/:token", async (req, res) => {
   const { token } = req.params;
   const link = await prisma.sessionShareLink.findUnique({
@@ -136,6 +183,131 @@ router.get("/queue/:token", async (req, res) => {
     session: { id: session.id, name: session.name },
     courts,
     queue: queueEntries
+  });
+});
+
+router.get("/session-invite/:token", async (req, res) => {
+  const { token } = req.params;
+  const link = await prisma.sessionInviteLink.findUnique({
+    where: { token },
+    include: { session: true }
+  });
+
+  if (!link || link.revokedAt) {
+    return res.status(404).json({ error: "Link not found" });
+  }
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return res.status(410).json({ error: "Link expired" });
+  }
+
+  res.json({
+    session: {
+      id: link.session.id,
+      name: link.session.name,
+      status: link.session.status,
+      startsAt: link.session.startsAt,
+      endsAt: link.session.endsAt
+    }
+  });
+});
+
+router.get("/session-invite/:token/players", async (req, res) => {
+  const { token } = req.params;
+  const link = await prisma.sessionInviteLink.findUnique({
+    where: { token },
+    include: { session: true }
+  });
+
+  if (!link || link.revokedAt) {
+    return res.status(404).json({ error: "Link not found" });
+  }
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return res.status(410).json({ error: "Link expired" });
+  }
+
+  const sessionPlayers = await prisma.sessionPlayer.findMany({
+    where: { sessionId: link.session.id },
+    include: { player: true },
+    orderBy: { checkedInAt: "asc" }
+  });
+
+  res.json({
+    session: { id: link.session.id, name: link.session.name },
+    players: sessionPlayers.map((sp) => ({
+      id: sp.id,
+      playerId: sp.playerId,
+      checkedInAt: sp.checkedInAt,
+      isNewPlayer: sp.isNewPlayer,
+      status: sp.status,
+      player: {
+        id: sp.player.id,
+        fullName: sp.player.fullName,
+        nickname: sp.player.nickname
+      }
+    }))
+  });
+});
+
+router.post("/session-invite/:token/register", async (req, res) => {
+  const { token } = req.params;
+  const { fullName, nickname, contact, newPlayer } = req.body || {};
+  const isNewPlayer = typeof newPlayer === "boolean" ? newPlayer : false;
+
+  if (!fullName || typeof fullName !== "string") {
+    return res.status(400).json({ error: "Full name is required" });
+  }
+
+  const link = await prisma.sessionInviteLink.findUnique({
+    where: { token },
+    include: { session: true }
+  });
+
+  if (!link || link.revokedAt) {
+    return res.status(404).json({ error: "Link not found" });
+  }
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return res.status(410).json({ error: "Link expired" });
+  }
+  if (link.session.status !== "open") {
+    return res.status(409).json({ error: "Session is not open" });
+  }
+
+  let player = null;
+  if (contact) {
+    player = await prisma.player.findFirst({ where: { contact, deletedAt: null } });
+  }
+  if (!player) {
+    player = await prisma.player.findFirst({ where: { fullName, deletedAt: null } });
+  }
+
+  if (!player) {
+    player = await prisma.player.create({
+      data: { fullName, nickname, contact }
+    });
+  } else if (nickname || contact) {
+    player = await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        nickname: nickname || player.nickname,
+        contact: contact || player.contact
+      }
+    });
+  }
+
+  const sessionPlayer = await prisma.sessionPlayer.upsert({
+    where: { sessionId_playerId: { sessionId: link.session.id, playerId: player.id } },
+    update: { status: "checked_in", isNewPlayer },
+    create: {
+      sessionId: link.session.id,
+      playerId: player.id,
+      status: "checked_in",
+      isNewPlayer
+    }
+  });
+
+  res.json({
+    player: { id: player.id, fullName: player.fullName, nickname: player.nickname, contact: player.contact },
+    sessionPlayer
   });
 });
 

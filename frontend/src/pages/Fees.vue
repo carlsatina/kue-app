@@ -1,6 +1,6 @@
 <template>
   <div class="stack">
-    <div class="card">
+    <div class="card live-surface">
       <div class="section-title">Balances</div>
       <div v-if="error" class="notice">{{ error }}</div>
       <div v-for="b in balances" :key="b.playerId" class="card">
@@ -51,7 +51,13 @@ const paymentTarget = ref(null);
 
 async function load() {
   try {
-    session.value = await api.activeSession();
+    const activeSession = await api.activeSession();
+    if (!activeSession) {
+      session.value = null;
+      balances.value = [];
+      return;
+    }
+    session.value = activeSession;
     const data = await api.balances(session.value.id);
     balances.value = data.balances || [];
   } catch (err) {

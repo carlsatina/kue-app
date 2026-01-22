@@ -5,7 +5,7 @@
         <h1 class="title">Kue</h1>
         <div class="subtitle">Mobile-first queue control for courts</div>
       </div>
-      <button v-if="authed" class="button ghost" @click="logout">Logout</button>
+      <button v-if="showLogout" class="button ghost" @click="logout">Logout</button>
     </header>
     <router-view />
   </div>
@@ -58,6 +58,7 @@ const route = useRoute();
 const router = useRouter();
 
 const authed = computed(() => Boolean(localStorage.getItem("token")));
+const showLogout = computed(() => authed.value && !route.meta.public);
 const showNav = computed(() => !route.meta.public && authed.value);
 
 function logout() {

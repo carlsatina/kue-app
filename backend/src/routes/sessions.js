@@ -15,6 +15,11 @@ const createSchema = z.object({
   announcements: z.string().optional()
 });
 
+const feeSchema = z.object({
+  feeMode: z.enum(["flat", "per_game"]).optional(),
+  feeAmount: z.number().nonnegative().optional()
+});
+
 router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
   const parse = createSchema.safeParse(req.body);
   if (!parse.success) {
@@ -46,7 +51,7 @@ router.post("/:id/open", requireAuth, requireRole(["admin"]), async (req, res) =
 
   const session = await prisma.session.update({
     where: { id },
-    data: { status: "open" }
+    data: { status: "open", closedAt: null }
   });
 
   const activeCourts = await prisma.court.findMany({ where: { active: true, deletedAt: null } });
@@ -81,7 +86,7 @@ router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, 
     where: { status: "open" }
   });
   if (!session) {
-    return res.status(404).json({ error: "No active session" });
+    return res.json(null);
   }
 
   const courtSessions = await prisma.courtSession.findMany({
@@ -110,6 +115,16 @@ router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, 
   }));
 
   res.json({ ...session, courtSessions: enrichedCourtSessions });
+});
+
+router.get("/", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { status } = req.query;
+  const where = status ? { status: String(status) } : {};
+  const sessions = await prisma.session.findMany({
+    where,
+    orderBy: { createdAt: "desc" }
+  });
+  res.json(sessions);
 });
 
 router.get("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
@@ -147,6 +162,33 @@ router.get("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, res
   }));
 
   res.json({ ...session, courtSessions: enrichedCourtSessions });
+});
+
+router.patch("/:id/fee", requireAuth, requireRole(["admin"]), async (req, res) => {
+  const parse = feeSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  if (parse.data.feeMode == null && parse.data.feeAmount == null) {
+    return res.status(400).json({ error: "No fee updates provided" });
+  }
+
+  const session = await prisma.session.findUnique({ where: { id: req.params.id } });
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  if (session.status !== "open") {
+    return res.status(409).json({ error: "Only open sessions can update fees" });
+  }
+
+  const updated = await prisma.session.update({
+    where: { id: req.params.id },
+    data: {
+      feeMode: parse.data.feeMode ?? session.feeMode,
+      feeAmount: parse.data.feeAmount ?? session.feeAmount
+    }
+  });
+  res.json(updated);
 });
 
 router.get("/:id/players", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {

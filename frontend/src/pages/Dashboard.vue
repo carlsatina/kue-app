@@ -1,6 +1,6 @@
 <template>
   <div class="stack">
-    <div class="card stack">
+    <div class="card stack session-compact">
       <div class="kpi">
         <div>
           <div class="subtitle">Active Session</div>
@@ -21,17 +21,21 @@
         </div>
         <button class="button" @click="createSession">Create Session</button>
       </div>
-      <div v-else class="grid two">
-        <button class="button" @click="refresh">Refresh</button>
-        <button v-if="session.status !== 'open'" class="button secondary" @click="openSession">Open</button>
-        <button v-else class="button ghost" @click="closeSession">Close Session</button>
+      <div v-else class="session-actions">
+        <button class="button button-compact" @click="refresh">Refresh</button>
+        <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
+        <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
+        <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card live-surface">
       <div class="kpi" style="margin-bottom: 8px;">
         <div class="section-title">Courts</div>
-        <button class="button ghost" @click="showAddCourt = true">Add Court</button>
+        <div class="inline-actions">
+          <button class="button ghost button-compact" @click="createInviteLink">Create Join Link</button>
+          <button class="button ghost" @click="showAddCourt = true">Add Court</button>
+        </div>
       </div>
       <div class="grid two">
         <div v-for="court in courts" :key="court.id" class="card court-card">
@@ -50,7 +54,7 @@
               </button>
             </div>
             <span class="badge" :class="court.status === 'maintenance' ? 'warning' : ''">
-              {{ court.status || 'available' }}
+              {{ courtStatusLabel(court.status) }}
             </span>
           </div>
           <div v-if="court.status === 'available'" class="inline-actions">
@@ -79,6 +83,30 @@
         </div>
       </div>
       <div v-if="error" class="notice" style="margin-top:12px;">{{ error }}</div>
+    </div>
+
+    <div class="card">
+      <button class="collapse-head" @click="togglePastSessions" type="button">
+        <span class="section-title">Past Sessions</span>
+        <span class="collapse-meta">
+          {{ pastSessions.length }} total
+          <span class="collapse-chevron" :class="{ open: showPastSessions }">▾</span>
+        </span>
+      </button>
+      <div v-if="showPastSessions" class="collapse-body">
+        <div v-if="pastSessions.length === 0" class="subtitle">No closed sessions yet.</div>
+        <div v-for="s in pastSessions" :key="s.id" class="card">
+          <div class="kpi">
+            <strong class="session-name">{{ s.name }}</strong>
+            <span class="badge neutral">{{ s.status }}</span>
+          </div>
+          <div class="subtitle">Closed: {{ formatDateTime(s.closedAt) }}</div>
+          <div class="inline-actions">
+            <button class="button ghost button-compact" @click="viewRoster(s)">View Roster</button>
+            <button class="button button-compact" @click="reopenSession(s)">Reopen</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div v-if="showAddCourt" class="modal-backdrop">
@@ -147,6 +175,63 @@
       </div>
     </div>
   </div>
+  <div v-if="showEditFee" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Edit Session Fee</h3>
+      <div class="subtitle">{{ session?.name }}</div>
+      <div class="grid two">
+        <input class="input" v-model.number="editFeeAmount" type="number" min="0" placeholder="Fee amount" />
+        <select class="input" v-model="editFeeMode">
+          <option value="flat">Flat fee</option>
+          <option value="per_game">Per game</option>
+        </select>
+      </div>
+      <div v-if="editFeeError" class="notice">{{ editFeeError }}</div>
+      <div class="grid two">
+        <button class="button" @click="saveEditFee">Save</button>
+        <button class="button ghost" @click="closeEditFee">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div v-if="showInviteLink" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Session Join Link</h3>
+      <div class="subtitle">Share this link so players can register.</div>
+      <div class="share-link">
+        <input class="input" readonly :value="inviteLink" />
+        <button class="button ghost button-compact" @click="copyInviteLink">Copy</button>
+      </div>
+      <button class="button ghost" @click="closeInviteLink">Close</button>
+    </div>
+  </div>
+  <div v-if="showRoster" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Session Roster</h3>
+      <div class="subtitle">{{ rosterSession?.name }}</div>
+      <div v-if="rosterPlayers.length === 0" class="subtitle">No players recorded.</div>
+      <div v-else class="roster-list">
+        <div v-for="sp in rosterPlayers" :key="sp.id" class="roster-item">
+          <div class="roster-name">{{ sp.player.nickname || sp.player.fullName }}</div>
+          <span class="badge neutral">{{ sp.status }}</span>
+          <div class="roster-meta">GP {{ sp.gamesPlayed }}</div>
+        </div>
+      </div>
+      <button class="button ghost" @click="closeRoster">Close</button>
+    </div>
+  </div>
+  <div v-if="showReopenConfirm" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Reopen Session</h3>
+      <div class="subtitle">
+        Another session is currently open. Close the active session and reopen
+        <strong>{{ reopenTarget?.name }}</strong>?
+      </div>
+      <div class="grid two">
+        <button class="button ghost" @click="cancelReopen">Cancel</button>
+        <button class="button" @click="confirmReopen">Yes, Reopen</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -180,10 +265,29 @@ const showEndMatch = ref(false);
 const endMatchCourt = ref(null);
 const endMatchError = ref("");
 const endMatchTeams = ref({ teamA: "—", teamB: "—" });
+const showInviteLink = ref(false);
+const inviteLink = ref("");
+const pastSessions = ref([]);
+const showRoster = ref(false);
+const rosterPlayers = ref([]);
+const rosterSession = ref(null);
+const showReopenConfirm = ref(false);
+const reopenTarget = ref(null);
+const showPastSessions = ref(false);
+const showEditFee = ref(false);
+const editFeeMode = ref("flat");
+const editFeeAmount = ref(0);
+const editFeeError = ref("");
 
 async function refresh() {
   try {
     const sessionData = await api.activeSession();
+    if (!sessionData) {
+      session.value = null;
+      courts.value = [];
+      pastSessions.value = await api.listSessions("closed");
+      return;
+    }
     let courtSessions = sessionData.courtSessions || [];
 
     const missingMatches = courtSessions.filter(
@@ -203,9 +307,43 @@ async function refresh() {
 
     session.value = { ...sessionData, courtSessions };
     courts.value = courtSessions;
+    pastSessions.value = await api.listSessions("closed");
   } catch {
     session.value = null;
     courts.value = [];
+    pastSessions.value = await api.listSessions("closed");
+  }
+}
+
+function togglePastSessions() {
+  showPastSessions.value = !showPastSessions.value;
+}
+
+function openEditFee() {
+  if (!session.value || session.value.status !== "open") return;
+  editFeeMode.value = session.value.feeMode || "flat";
+  editFeeAmount.value = Number(session.value.feeAmount || 0);
+  editFeeError.value = "";
+  showEditFee.value = true;
+}
+
+function closeEditFee() {
+  showEditFee.value = false;
+  editFeeError.value = "";
+}
+
+async function saveEditFee() {
+  if (!session.value || session.value.status !== "open") return;
+  editFeeError.value = "";
+  try {
+    await api.updateSessionFee(session.value.id, {
+      feeMode: editFeeMode.value,
+      feeAmount: Number(editFeeAmount.value)
+    });
+    showEditFee.value = false;
+    await refresh();
+  } catch (err) {
+    editFeeError.value = err.message || "Unable to update fee";
   }
 }
 
@@ -220,8 +358,12 @@ async function createSession() {
 
 async function openSession() {
   if (!session.value) return;
-  await api.openSession(session.value.id);
-  await refresh();
+  try {
+    await api.openSession(session.value.id);
+    await refresh();
+  } catch (err) {
+    error.value = err.message || "Unable to open session";
+  }
 }
 
 async function closeSession() {
@@ -292,6 +434,19 @@ function elapsedTime(startedAt) {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
+function courtStatusLabel(status) {
+  if (status === "in_match") return "Occupied";
+  if (status === "maintenance") return "Maintenance";
+  if (status === "available") return "Available";
+  return status || "—";
+}
+
+function formatDateTime(timestamp) {
+  if (!timestamp) return "—";
+  const dt = new Date(timestamp);
+  return dt.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 async function createCourt() {
   addCourtError.value = "";
   if (!newCourtName.value.trim()) {
@@ -312,6 +467,64 @@ function closeAddCourt() {
   newCourtName.value = "";
   newCourtNotes.value = "";
   addCourtError.value = "";
+}
+
+async function createInviteLink() {
+  if (!session.value) return;
+  const link = await api.createSessionInviteLink(session.value.id);
+  inviteLink.value = `${window.location.origin}/join/${link.token}`;
+  showInviteLink.value = true;
+}
+
+async function copyInviteLink() {
+  if (!inviteLink.value) return;
+  await navigator.clipboard.writeText(inviteLink.value);
+}
+
+function closeInviteLink() {
+  showInviteLink.value = false;
+  inviteLink.value = "";
+}
+
+async function viewRoster(sessionItem) {
+  rosterSession.value = sessionItem;
+  rosterPlayers.value = await api.sessionPlayers(sessionItem.id);
+  showRoster.value = true;
+}
+
+function closeRoster() {
+  showRoster.value = false;
+  rosterPlayers.value = [];
+  rosterSession.value = null;
+}
+
+async function reopenSession(sessionItem) {
+  reopenTarget.value = sessionItem;
+  if (session.value && session.value.status === "open") {
+    showReopenConfirm.value = true;
+    return;
+  }
+  await confirmReopen();
+}
+
+function cancelReopen() {
+  showReopenConfirm.value = false;
+  reopenTarget.value = null;
+}
+
+async function confirmReopen() {
+  if (!reopenTarget.value) return;
+  try {
+    if (session.value && session.value.status === "open") {
+      await api.closeSession(session.value.id);
+    }
+    await api.openSession(reopenTarget.value.id);
+    showReopenConfirm.value = false;
+    reopenTarget.value = null;
+    await refresh();
+  } catch (err) {
+    error.value = err.message || "Unable to reopen session";
+  }
 }
 
 function closeEndMatch() {

@@ -60,4 +60,25 @@ router.post("/session/:id/revoke", requireAuth, requireRole(["admin", "staff"]),
   res.json(link);
 });
 
+router.post("/session-invite/:sessionId", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { sessionId } = req.params;
+  const token = crypto.randomBytes(24).toString("hex");
+  const link = await prisma.sessionInviteLink.create({
+    data: {
+      token,
+      sessionId
+    }
+  });
+  res.json(link);
+});
+
+router.post("/session-invite/:id/revoke", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { id } = req.params;
+  const link = await prisma.sessionInviteLink.update({
+    where: { id },
+    data: { revokedAt: new Date() }
+  });
+  res.json(link);
+});
+
 export default router;

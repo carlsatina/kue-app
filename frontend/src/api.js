@@ -24,11 +24,13 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   activeSession: () => request("/sessions/active"),
+  listSessions: (status) => request(`/sessions${status ? `?status=${status}` : ""}`),
   sessionPlayers: (sessionId) => request(`/sessions/${sessionId}/players`),
   rankings: (sessionId) => request(`/sessions/${sessionId}/rankings`),
   createSession: (payload) => request("/sessions", { method: "POST", body: JSON.stringify(payload) }),
   openSession: (id) => request(`/sessions/${id}/open`, { method: "POST" }),
   closeSession: (id) => request(`/sessions/${id}/close`, { method: "POST" }),
+  updateSessionFee: (id, payload) => request(`/sessions/${id}/fee`, { method: "PATCH", body: JSON.stringify(payload) }),
   listCourts: () => request("/courts"),
   createCourt: (payload) => request("/courts", { method: "POST", body: JSON.stringify(payload) }),
   updateCourt: (id, payload) => request(`/courts/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -54,7 +56,17 @@ export const api = {
   createShareLink: (sessionId, payload) => request(`/share-links/${sessionId}`, { method: "POST", body: JSON.stringify(payload) }),
   revokeShareLink: (id) => request(`/share-links/${id}/revoke`, { method: "POST" }),
   createSessionShareLink: (sessionId) => request(`/share-links/session/${sessionId}`, { method: "POST" }),
+  createSessionInviteLink: (sessionId) => request(`/share-links/session-invite/${sessionId}`, { method: "POST" }),
   publicPlayer: (token) => fetch(`${API_URL}/public/player/${token}`).then((r) => r.json()),
   publicQueue: (token) => fetch(`${API_URL}/public/queue/${token}`).then((r) => r.json()),
+  publicQueueRankings: (token) => fetch(`${API_URL}/public/queue/${token}/rankings`).then((r) => r.json()),
+  publicSessionInvite: (token) => fetch(`${API_URL}/public/session-invite/${token}`).then((r) => r.json()),
+  publicSessionInvitePlayers: (token) => fetch(`${API_URL}/public/session-invite/${token}/players`).then((r) => r.json()),
+  publicSessionRegister: (token, payload) =>
+    fetch(`${API_URL}/public/session-invite/${token}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then((r) => r.json()),
   publicBoard: (sessionId) => fetch(`${API_URL}/public/board/${sessionId}`).then((r) => r.json())
 };

@@ -1,6 +1,6 @@
 <template>
   <div class="stack">
-    <div class="card">
+    <div class="card live-surface">
       <div class="section-title">Rankings</div>
       <div v-if="!session" class="subtitle">No active session.</div>
       <div v-else class="rank-summary">
@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <div class="card stack" v-if="session">
+    <div class="card stack live-surface" v-if="session">
       <div v-if="rankedPlayers.length === 0" class="subtitle">No stats yet.</div>
       <div v-for="player in rankedPlayers" :key="player.playerId" class="rank-card">
         <div class="rank-left">
@@ -46,7 +46,14 @@ const totalPlayers = ref(0);
 
 async function load() {
   try {
-    session.value = await api.activeSession();
+    const activeSession = await api.activeSession();
+    if (!activeSession) {
+      session.value = null;
+      rankedPlayers.value = [];
+      totalPlayers.value = 0;
+      return;
+    }
+    session.value = activeSession;
     const data = await api.rankings(session.value.id);
     rankedPlayers.value = data.players || [];
     totalPlayers.value = data.totalPlayers || 0;

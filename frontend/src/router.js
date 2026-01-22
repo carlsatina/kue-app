@@ -8,12 +8,14 @@ import Rankings from "./pages/Rankings.vue";
 import PublicPlayer from "./pages/PublicPlayer.vue";
 import PublicBoard from "./pages/PublicBoard.vue";
 import PublicQueue from "./pages/PublicQueue.vue";
+import JoinSession from "./pages/JoinSession.vue";
 
 const routes = [
   { path: "/login", component: Login, meta: { public: true } },
   { path: "/register", component: Register, meta: { public: true } },
   { path: "/p/:token", component: PublicPlayer, meta: { public: true } },
   { path: "/q/:token", component: PublicQueue, meta: { public: true } },
+  { path: "/join/:token", component: JoinSession, meta: { public: true } },
   { path: "/board/:sessionId", component: PublicBoard, meta: { public: true } },
   { path: "/", component: Dashboard },
   { path: "/players", component: Players },

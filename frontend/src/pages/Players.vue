@@ -13,9 +13,9 @@
       </button>
     </div>
 
-    <div v-if="activeTab === 'players'" class="card stack">
+    <div v-if="activeTab === 'players'" class="card stack live-surface">
       <div class="section-title">Player Name &amp; Skill Level</div>
-      <input class="input" v-model="fullName" placeholder="Enter player name" />
+      <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!session" />
       <div class="chip-row">
         <button
           v-for="level in skillLevels"
@@ -23,78 +23,81 @@
           class="chip"
           :class="{ active: skillLevel === level }"
           type="button"
+          :disabled="!session"
           @click="skillLevel = level"
         >
           {{ level }}
         </button>
       </div>
-      <button class="button" @click="addPlayer">Add Player</button>
+      <button class="button" @click="addPlayer" :disabled="!session">Add Player</button>
       <div v-if="addError" class="notice">{{ addError }}</div>
     </div>
 
-    <div v-if="activeTab === 'players'" class="card stack">
-      <div class="grid two">
+    <div v-if="activeTab === 'players'" class="card stack live-surface">
+      <div v-if="!session" class="subtitle">No active session. Open a session to view and queue players.</div>
+      <template v-else>
         <div class="stack">
           <div class="subtitle">Search Players</div>
           <input class="input" v-model="search" placeholder="Search players" />
           <div class="subtitle">{{ filteredPlayers.length }} Players Available</div>
         </div>
-        <div class="stack">
-          <div class="subtitle">Filter Players</div>
-          <select class="input" v-model="filterSkill">
-            <option value="">None</option>
-            <option v-for="level in skillLevels" :key="level" :value="level">{{ level }}</option>
-          </select>
+
+        <div class="game-type">
+          <div class="subtitle">Game type</div>
+          <label class="radio-row">
+            <input type="radio" value="doubles" v-model="gameType" />
+            Doubles
+          </label>
+          <label class="radio-row">
+            <input type="radio" value="singles" v-model="gameType" />
+            Singles
+          </label>
         </div>
-      </div>
 
-      <div class="game-type">
-        <div class="subtitle">Game type</div>
-        <label class="radio-row">
-          <input type="radio" value="doubles" v-model="gameType" />
-          Doubles
-        </label>
-        <label class="radio-row">
-          <input type="radio" value="singles" v-model="gameType" />
-          Singles
-        </label>
-      </div>
-
-      <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
-      <div class="player-grid">
-        <div
-          v-for="player in filteredPlayers"
-          :key="player.id"
-          class="player-card"
-          :class="{
-            selected: selectedIds.includes(player.id),
-            disabled: isPlaying(player)
-          }"
-          @click="toggleSelect(player)"
-        >
-          <div class="player-card-top">
+        <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
+        <div class="player-grid">
+          <div
+            v-for="player in filteredPlayers"
+            :key="player.id"
+            class="player-card"
+            :class="{
+              selected: selectedIds.includes(player.id),
+              disabled: isPlaying(player),
+              'new-player': isNewPlayer(player)
+            }"
+            @click="toggleSelect(player)"
+          >
+            <div class="player-card-top">
             <div class="player-name">
-              <strong>{{ player.nickname || player.fullName }}</strong>
-              <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
-                </svg>
-              </button>
+              <div class="player-name-row">
+                <strong class="player-name-text">{{ player.nickname || player.fullName }}</strong>
+                <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
             <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
           </div>
-          <div class="subtitle">Games: {{ gamesPlayed(player.id) }}</div>
+          <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
+          <div class="subtitle join-order-line">Join order: #{{ joinOrder(player.id) }}</div>
         </div>
-      </div>
+        </div>
 
-      <div class="inline-actions">
-        <button class="button" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
-        <button class="button ghost" :disabled="selectedIds.length === 0" @click="clearSelection">Clear</button>
-      </div>
-      <div v-if="queueError" class="notice">{{ queueError }}</div>
+        <div class="inline-actions">
+          <button class="button" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
+          <button class="button ghost" :disabled="selectedIds.length === 0" @click="clearSelection">Clear</button>
+          <button class="button ghost danger" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
+            Remove
+          </button>
+        </div>
+        <div v-if="queueError" class="notice">{{ queueError }}</div>
+        <div v-if="removeError" class="notice">{{ removeError }}</div>
+      </template>
     </div>
 
-    <div v-if="activeTab === 'queue'" class="card stack">
+    <div v-if="activeTab === 'queue'" class="card stack live-surface">
       <div class="queue-header">
         <div>
           <div class="section-title">Queue</div>
@@ -115,7 +118,7 @@
       </div>
 
       <div v-if="queueMatches.length === 0" class="subtitle">Queue is empty.</div>
-      <div v-for="(match, idx) in queueMatches" :key="match.id" class="queue-match-card">
+      <div v-for="(match, idx) in queueMatches" :key="match.id" class="queue-match-card" :class="{ alt: idx % 2 === 1 }">
         <div class="queue-card-head">
           <strong>#{{ idx + 1 }} {{ match.typeLabel }}</strong>
           <span class="subtitle">Requested {{ formatTime(match.requestedAt) }}</span>
@@ -201,6 +204,28 @@
         </div>
       </div>
     </div>
+    <div v-if="showDuplicateWarning" class="modal-backdrop">
+      <div class="modal-card">
+        <h3>Players already queued or playing</h3>
+        <div class="subtitle">
+          {{ duplicateWarningText }}
+        </div>
+        <div class="grid two">
+          <button class="button" @click="confirmDuplicateWarning">Add Anyway</button>
+          <button class="button ghost" @click="closeDuplicateWarning">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="showRemoveConfirm" class="modal-backdrop">
+      <div class="modal-card">
+        <h3>Remove players</h3>
+        <div class="subtitle">{{ removeConfirmText }}</div>
+        <div class="grid two">
+          <button class="button danger" @click="confirmRemoveSelected">Remove</button>
+          <button class="button ghost" @click="closeRemoveConfirm">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -218,10 +243,10 @@ const fullName = ref("");
 const skillLevel = ref("Beginner");
 const addError = ref("");
 const search = ref("");
-const filterSkill = ref("");
 const gameType = ref("doubles");
 const selectedIds = ref([]);
 const queueError = ref("");
+const removeError = ref("");
 const queueShareLink = ref("");
 const historySearch = ref("");
 const showEditPlayer = ref(false);
@@ -229,6 +254,10 @@ const editPlayerId = ref("");
 const editPlayerName = ref("");
 const editSkillLevel = ref("Beginner");
 const editError = ref("");
+const showDuplicateWarning = ref(false);
+const duplicateWarningNames = ref([]);
+const showRemoveConfirm = ref(false);
+const removeConfirmNames = ref([]);
 const nowTick = ref(Date.now());
 let timerId = null;
 
@@ -239,6 +268,19 @@ const selectionLimit = computed(() => 4);
 const sessionPlayerMap = computed(() => {
   const map = new Map();
   sessionPlayers.value.forEach((sp) => map.set(sp.playerId, sp));
+  return map;
+});
+
+const joinOrderMap = computed(() => {
+  const sorted = sessionPlayers.value
+    .filter((sp) => sp.status !== "done")
+    .sort((a, b) => {
+      const aTime = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+      const bTime = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  const map = new Map();
+  sorted.forEach((sp, idx) => map.set(sp.playerId, idx + 1));
   return map;
 });
 
@@ -259,19 +301,34 @@ const queuedIds = computed(() => {
   return ids;
 });
 
+const sessionPlayerList = computed(() => {
+  if (!session.value) return [];
+  return sessionPlayers.value.filter((sp) => sp.status !== "done").map((sp) => sp.player);
+});
+
 const filteredPlayers = computed(() => {
   const q = search.value.trim().toLowerCase();
-  return players.value.filter((p) => {
+  return sessionPlayerList.value.filter((p) => {
     const name = `${p.fullName} ${p.nickname || ""}`.toLowerCase();
     const matchesSearch = !q || name.includes(q);
-    const matchesSkill = !filterSkill.value || p.skillLevel === filterSkill.value;
-    return matchesSearch && matchesSkill;
+    return matchesSearch;
   });
 });
 
 const canAdd = computed(() => selectedIds.value.length === selectionLimit.value && session.value);
 
 const queueMatchCount = computed(() => queueMatches.value.length);
+const duplicateWarningText = computed(() => {
+  if (!duplicateWarningNames.value.length) {
+    return "Selected players are already queued or playing. Add to queue again?";
+  }
+  return `These players are already queued or playing: ${duplicateWarningNames.value.join(", ")}. Add to queue again?`;
+});
+
+const removeConfirmText = computed(() => {
+  if (!removeConfirmNames.value.length) return "Remove the selected players from this session?";
+  return `Remove ${removeConfirmNames.value.join(", ")} from this session?`;
+});
 
 const queueMatches = computed(() => {
   const entries = queueEntries.value.slice();
@@ -309,8 +366,16 @@ function isQueued(player) {
   return queuedIds.value.has(player.id);
 }
 
+function isNewPlayer(player) {
+  return sessionPlayerMap.value.get(player.id)?.isNewPlayer || false;
+}
+
 function gamesPlayed(playerId) {
   return sessionPlayerMap.value.get(playerId)?.gamesPlayed || 0;
+}
+
+function joinOrder(playerId) {
+  return joinOrderMap.value.get(playerId) || "—";
 }
 
 function statusLabel(player) {
@@ -321,8 +386,11 @@ function statusLabel(player) {
   if (sp.status === "away") return "Away";
   if (sp.status === "done") return "Done";
   if (sp.status === "checked_in") {
-    const elapsed = idleElapsed(sp);
-    return `Idle ${elapsed}`;
+    if (sp.lastPlayedAt) {
+      const elapsed = idleElapsed(sp);
+      return `Idle ${elapsed}`;
+    }
+    return "Ready";
   }
   return "—";
 }
@@ -334,12 +402,14 @@ function statusClass(player) {
   if (!sp) return "neutral";
   if (sp.status === "away") return "away";
   if (sp.status === "done") return "done";
-  if (sp.status === "checked_in") return "idle";
+  if (sp.status === "checked_in") {
+    return sp.lastPlayedAt ? "idle" : "checkedin";
+  }
   return "neutral";
 }
 
 function idleElapsed(sp) {
-  const start = sp.lastPlayedAt || sp.checkedInAt;
+  const start = sp.lastPlayedAt;
   if (!start) return "0:00";
   const diffMs = Math.max(0, nowTick.value - new Date(start).getTime());
   const totalSeconds = Math.floor(diffMs / 1000);
@@ -365,10 +435,17 @@ function clearSelection() {
 async function load() {
   players.value = await api.listPlayers();
   try {
-    session.value = await api.activeSession();
-    queueEntries.value = await api.getQueue(session.value.id);
-    sessionPlayers.value = await api.sessionPlayers(session.value.id);
-    matches.value = await api.matchHistory(session.value.id);
+    const activeSession = await api.activeSession();
+    session.value = activeSession;
+    if (!activeSession) {
+      queueEntries.value = [];
+      sessionPlayers.value = [];
+      matches.value = [];
+      return;
+    }
+    queueEntries.value = await api.getQueue(activeSession.id);
+    sessionPlayers.value = await api.sessionPlayers(activeSession.id);
+    matches.value = await api.matchHistory(activeSession.id);
   } catch {
     session.value = null;
     queueEntries.value = [];
@@ -383,9 +460,16 @@ async function addPlayer() {
     addError.value = "Player name is required.";
     return;
   }
-  await api.createPlayer({ fullName: fullName.value.trim(), skillLevel: skillLevel.value });
-  fullName.value = "";
-  await load();
+  try {
+    const created = await api.createPlayer({ fullName: fullName.value.trim(), skillLevel: skillLevel.value });
+    if (session.value?.id) {
+      await api.checkinPlayer(created.id, { sessionId: session.value.id });
+    }
+    fullName.value = "";
+    await load();
+  } catch (err) {
+    addError.value = err.message || "Unable to add player";
+  }
 }
 
 async function ensureCheckedIn(playerIds) {
@@ -401,25 +485,18 @@ async function ensureCheckedIn(playerIds) {
 async function addToQueue() {
   if (!session.value) return;
   queueError.value = "";
+  removeError.value = "";
   if (selectedIds.value.length !== selectionLimit.value) {
     queueError.value = `Select ${selectionLimit.value} players.`;
     return;
   }
 
   try {
-    await ensureCheckedIn(selectedIds.value);
-    if (gameType.value === "doubles") {
-      const teamA = selectedIds.value.slice(0, 2);
-      const teamB = selectedIds.value.slice(2, 4);
-      await api.enqueue(session.value.id, { type: "doubles", playerIds: teamA });
-      await api.enqueue(session.value.id, { type: "doubles", playerIds: teamB });
-    } else {
-      for (const playerId of selectedIds.value) {
-        await api.enqueue(session.value.id, { type: "singles", playerIds: [playerId] });
-      }
+    if (hasDuplicateSelection()) {
+      openDuplicateWarning();
+      return;
     }
-    selectedIds.value = [];
-    await load();
+    await enqueueSelectedPlayers();
   } catch (err) {
     queueError.value = err.message || "Unable to add to queue";
   }
@@ -551,6 +628,100 @@ function closeEditPlayer() {
   editPlayerName.value = "";
   editSkillLevel.value = "Beginner";
   editError.value = "";
+}
+
+function hasDuplicateSelection() {
+  return selectedIds.value.some((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId));
+}
+
+function openDuplicateWarning() {
+  duplicateWarningNames.value = selectedIds.value
+    .filter((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId))
+    .map((id) => players.value.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p) => p.nickname || p.fullName);
+  showDuplicateWarning.value = true;
+}
+
+function closeDuplicateWarning() {
+  showDuplicateWarning.value = false;
+  duplicateWarningNames.value = [];
+}
+
+async function confirmDuplicateWarning() {
+  showDuplicateWarning.value = false;
+  try {
+    await enqueueSelectedPlayers();
+  } catch (err) {
+    queueError.value = err.message || "Unable to add to queue";
+  } finally {
+    duplicateWarningNames.value = [];
+  }
+}
+
+async function enqueueSelectedPlayers() {
+  await ensureCheckedIn(selectedIds.value);
+  if (gameType.value === "doubles") {
+    const teamA = selectedIds.value.slice(0, 2);
+    const teamB = selectedIds.value.slice(2, 4);
+    await api.enqueue(session.value.id, { type: "doubles", playerIds: teamA });
+    await api.enqueue(session.value.id, { type: "doubles", playerIds: teamB });
+  } else {
+    for (const playerId of selectedIds.value) {
+      await api.enqueue(session.value.id, { type: "singles", playerIds: [playerId] });
+    }
+  }
+  selectedIds.value = [];
+  await load();
+}
+
+function openRemoveConfirm() {
+  removeError.value = "";
+  queueError.value = "";
+  if (!session.value || selectedIds.value.length === 0) return;
+  const blockedIds = selectedIds.value.filter(
+    (playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId)
+  );
+  if (blockedIds.length) {
+    const names = blockedIds
+      .map((id) => players.value.find((p) => p.id === id))
+      .filter(Boolean)
+      .map((p) => p.nickname || p.fullName);
+    removeError.value = names.length
+      ? `Cannot remove queued or playing players: ${names.join(", ")}.`
+      : "Cannot remove queued or playing players.";
+    return;
+  }
+  removeConfirmNames.value = selectedIds.value
+    .map((id) => players.value.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p) => p.nickname || p.fullName);
+  showRemoveConfirm.value = true;
+}
+
+function closeRemoveConfirm() {
+  showRemoveConfirm.value = false;
+  removeConfirmNames.value = [];
+}
+
+async function confirmRemoveSelected() {
+  showRemoveConfirm.value = false;
+  removeError.value = "";
+  if (!session.value || selectedIds.value.length === 0) {
+    removeConfirmNames.value = [];
+    return;
+  }
+  try {
+    for (const playerId of selectedIds.value) {
+      await api.checkoutPlayer(playerId, { sessionId: session.value.id, status: "done" });
+    }
+    selectedIds.value = [];
+    await load();
+  } catch (err) {
+    removeError.value = err.message || "Unable to remove player";
+  } finally {
+    removeConfirmNames.value = [];
+  }
 }
 
 watch(gameType, () => {
