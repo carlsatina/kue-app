@@ -3,7 +3,7 @@
     <header class="header">
       <div class="brand">
         <h1 class="title">Kue</h1>
-        <div class="subtitle">Mobile-first queue control for courts</div>
+        <div class="subtitle">Sassy court control. Fast queues. Instant hype.</div>
       </div>
       <div v-if="showNav" class="header-center">
         <nav class="nav nav-5">

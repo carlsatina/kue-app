@@ -41,8 +41,30 @@
             <div class="subtitle">Outstanding</div>
             <strong>{{ formatAmount(totalDue) }}</strong>
           </div>
+          <button
+            v-if="session.status === 'open'"
+            class="button button-compact fee-edit-button"
+            @click="openEditFee"
+          >
+            Edit Fee
+          </button>
         </div>
         <div v-if="error" class="notice">{{ error }}</div>
+      </div>
+    </div>
+  </div>
+  <div v-if="showEditFee" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Edit Session Fee</h3>
+      <div class="subtitle">{{ session?.name }}</div>
+      <div class="field">
+        <label class="field-label">Fee amount</label>
+        <input class="input" v-model.number="editFeeAmount" type="number" min="0" />
+      </div>
+      <div v-if="editFeeError" class="notice">{{ editFeeError }}</div>
+      <div class="grid two">
+        <button class="button" @click="saveEditFee">Save</button>
+        <button class="button ghost" @click="closeEditFee">Cancel</button>
       </div>
     </div>
   </div>
@@ -70,6 +92,9 @@ const session = ref(null);
 const error = ref("");
 const showPayment = ref(false);
 const paymentTarget = ref(null);
+const showEditFee = ref(false);
+const editFeeAmount = ref(0);
+const editFeeError = ref("");
 const totalDue = computed(() =>
   balances.value.reduce((sum, balance) => sum + Number(balance.remaining || 0), 0)
 );
@@ -108,6 +133,18 @@ function closePayment() {
   paymentTarget.value = null;
 }
 
+function openEditFee() {
+  if (!session.value || session.value.status !== "open") return;
+  editFeeAmount.value = Number(session.value.feeAmount || 0);
+  editFeeError.value = "";
+  showEditFee.value = true;
+}
+
+function closeEditFee() {
+  showEditFee.value = false;
+  editFeeError.value = "";
+}
+
 function formatMethod(method) {
   if (!method) return "";
   if (method.toLowerCase() === "cash") return "Cash";
@@ -129,6 +166,21 @@ async function record(method) {
   });
   closePayment();
   await load();
+}
+
+async function saveEditFee() {
+  if (!session.value || session.value.status !== "open") return;
+  editFeeError.value = "";
+  try {
+    await api.updateSessionFee(session.value.id, {
+      feeMode: "flat",
+      feeAmount: Number(editFeeAmount.value || 0)
+    });
+    showEditFee.value = false;
+    await load();
+  } catch (err) {
+    editFeeError.value = err.message || "Unable to update fee";
+  }
 }
 
 onMounted(load);

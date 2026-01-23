@@ -5,7 +5,7 @@ Date: 2026-01-22
 Assumptions / defaults (per user request):
 - New build in `frontend/` and `backend/`.
 - Open registration for queue masters (default role: admin).
-- One active session at a time (simplifies court status and queueing).
+- Multiple sessions can be open; UI uses a global session switcher.
 - Fee mode default: per-player flat fee; session can be configured.
 - Public links: `/p/:token` for player status, `/board/:sessionId` for session board.
 
@@ -14,12 +14,14 @@ Assumptions / defaults (per user request):
 ## 1) MVP Requirements, User Stories, Acceptance Criteria
 
 ### MVP Requirements
-- Sessions: create/open/close; active session query; close locks queue/match updates (admin override).
+- Sessions: create/open/close/edit; active session query returns most recent open; close locks queue/match updates (admin override).
+  - Session config includes game type (singles/doubles) and joiner limits.
 - Courts: CRUD; status (available/in_match/maintenance); show current + next match.
 - Players: CRUD; session status (checked_in/away/done); session stats (games_played, last_played_at).
 - Queue & matches: singles and doubles only; check-in, enqueue, dequeue, reorder; suggest next match; start/end match; return to queue or mark done.
 - Fees: session fee mode (flat or per_game); ledger payments; balances; who owes report.
 - Share links: tokenized view-only links per player; revoke/rotate; optional expiry; public board for session.
+- Brackets: generate from joined players; single/double/round robin; manual override + optional scores.
 
 ### User Stories + Acceptance Criteria
 1) As an organizer, I can create a session and open it so queues/matches are tied to it.
@@ -69,7 +71,10 @@ Assumptions / defaults (per user request):
 - sessions 1-* matches *- match_participants -* players
 - sessions 1-* payments *- players
 - sessions 1-* share_links *- players
+- sessions 1-* session_share_links
+- sessions 1-* session_invite_links
 - sessions 1-* court_sessions *- courts
+- sessions 1-* bracket_overrides
 
 ### SQL Schema (MVP)
 
@@ -102,8 +107,11 @@ CREATE TABLE sessions (
   starts_at TIMESTAMP,
   ends_at TIMESTAMP,
   status TEXT NOT NULL CHECK (status IN ('draft','open','closed')),
+  game_type TEXT NOT NULL CHECK (game_type IN ('singles','doubles')),
   fee_mode TEXT NOT NULL CHECK (fee_mode IN ('flat','per_game')),
   fee_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+  regular_join_limit INTEGER NOT NULL DEFAULT 0,
+  new_joiner_limit INTEGER NOT NULL DEFAULT 0,
   return_to_queue BOOLEAN NOT NULL DEFAULT TRUE,
   announcements TEXT,
   created_by UUID REFERENCES users(id),
@@ -146,7 +154,7 @@ CREATE TABLE session_players (
   id UUID PRIMARY KEY,
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('checked_in','away','done')),
+  status TEXT NOT NULL CHECK (status IN ('checked_in','present','away','done')),
   checked_in_at TIMESTAMP NOT NULL DEFAULT NOW(),
   last_played_at TIMESTAMP,
   games_played INTEGER NOT NULL DEFAULT 0,
@@ -186,6 +194,19 @@ CREATE TABLE matches (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE bracket_overrides (
+  id UUID PRIMARY KEY,
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  match_id TEXT NOT NULL,
+  bracket_type TEXT NOT NULL,
+  match_format TEXT NOT NULL,
+  winner_id UUID,
+  score_json JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, match_id, bracket_type, match_format)
+);
+
 CREATE TABLE match_participants (
   match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
   player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
@@ -215,6 +236,24 @@ CREATE TABLE share_links (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE session_share_links (
+  id UUID PRIMARY KEY,
+  token TEXT UNIQUE NOT NULL,
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  revoked_at TIMESTAMP,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE session_invite_links (
+  id UUID PRIMARY KEY,
+  token TEXT UNIQUE NOT NULL,
+  session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  revoked_at TIMESTAMP,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- indexes
 CREATE INDEX idx_sessions_status ON sessions(status);
 CREATE INDEX idx_court_sessions_session ON court_sessions(session_id);
@@ -223,6 +262,8 @@ CREATE INDEX idx_queue_entries_position ON queue_entries(session_id, position);
 CREATE INDEX idx_matches_session ON matches(session_id);
 CREATE INDEX idx_payments_session_player ON payments(session_id, player_id);
 CREATE INDEX idx_share_links_token ON share_links(token);
+CREATE INDEX idx_session_share_links_token ON session_share_links(token);
+CREATE INDEX idx_session_invite_links_token ON session_invite_links(token);
 ```
 
 ---
@@ -241,11 +282,20 @@ Base: `/api`
 
 ### Sessions
 - `POST /sessions` (admin)
-  - req: `{ name, startsAt, endsAt, feeMode, feeAmount, returnToQueue, announcements }`
+  - req: `{ name, startsAt, endsAt, feeMode, feeAmount, gameType, regularJoinLimit, newJoinerLimit, returnToQueue, announcements }`
 - `POST /sessions/:id/open` (admin)
 - `POST /sessions/:id/close` (admin)
+- `PATCH /sessions/:id` (admin)
 - `GET /sessions/active` (admin/staff)
+- `GET /sessions` (admin/staff)
 - `GET /sessions/:id` (admin/staff)
+- `GET /sessions/:id/players` (admin/staff)
+- `GET /sessions/:id/rankings` (admin/staff)
+
+### Brackets
+- `GET /sessions/:id/bracket-overrides` (admin/staff)
+- `POST /sessions/:id/bracket-overrides` (admin/staff)
+- `DELETE /sessions/:id/bracket-overrides` (admin/staff)
 
 ### Courts
 - `GET /courts` (admin/staff)
@@ -259,6 +309,8 @@ Base: `/api`
 - `POST /players` (admin/staff)
 - `PATCH /players/:id` (admin/staff)
 - `POST /players/:id/checkin` (admin/staff)
+  - req: `{ sessionId }`
+- `POST /players/:id/present` (admin/staff)
   - req: `{ sessionId }`
 - `POST /players/:id/checkout` (admin/staff)
   - req: `{ sessionId, status: 'away'|'done' }`
@@ -291,8 +343,15 @@ Base: `/api`
 - `POST /share-links/:sessionId` (admin/staff)
   - req: `{ playerId, expiresAt }`
 - `POST /share-links/:id/revoke` (admin/staff)
+- `POST /share-links/session/:sessionId` (admin/staff)
+- `POST /share-links/session/:id/revoke` (admin/staff)
+- `POST /share-links/session-invite/:sessionId` (admin/staff)
+- `POST /share-links/session-invite/:id/revoke` (admin/staff)
 - `GET /public/player/:token` (public)
 - `GET /public/board/:sessionId` (public)
+- `GET /public/queue/:token` (public)
+- `GET /public/queue/:token/rankings` (public)
+- `GET /public/queue/:token/bracket` (public)
 
 Auth: JWT via `Authorization: Bearer <token>`.
 
@@ -301,6 +360,7 @@ Auth: JWT via `Authorization: Bearer <token>`.
 ## 4) UI Screens (Mobile-first)
 
 ### Session Dashboard
+- Global session switcher in header (multi-session support).
 - Court cards (large, tap targets): court name, status, current match, next suggested.
 - Primary actions: Start Match / End Match (big buttons).
 - One-handed: bottom action bar (Suggest Next, Queue, Fees).
@@ -323,6 +383,13 @@ Auth: JWT via `Authorization: Bearer <token>`.
 ### Players Screen
 - Search + check-in/out; badge for status.
 - Quick actions: Add to queue, Generate share link, Mark done.
+
+### Bracket Screen
+- Bracket types (single/double/round robin) and export/print.
+- Singles seeding can be manually arranged and saved.
+
+### Team Builder
+- Doubles team builder for bracket generation (manual teams).
 
 ### Fees Screen
 - Balance list (owed/paid/remaining).

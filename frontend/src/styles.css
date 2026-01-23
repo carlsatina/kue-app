@@ -1734,6 +1734,9 @@ a {
   right: 10px;
   font-size: 18px;
   filter: drop-shadow(0 4px 6px rgba(31, 28, 23, 0.2));
+  display: inline-grid;
+  place-items: center;
+  z-index: 1;
 }
 
 .rank-icon {
@@ -1831,6 +1834,42 @@ a {
   font-size: 14px;
   line-height: 1;
   opacity: 0.8;
+  display: inline-grid;
+  place-items: center;
+  z-index: 1;
+}
+
+@media (min-width: 1100px) {
+  .rank-corner-icon {
+    font-size: 24px;
+    top: 8px;
+    right: 12px;
+    filter: drop-shadow(0 6px 10px rgba(31, 28, 23, 0.25));
+  }
+
+  .rank-row-icon {
+    font-size: 18px;
+    top: 6px;
+    right: 12px;
+    opacity: 0.9;
+  }
+}
+
+@media (min-width: 1100px) {
+  .rank-corner-icon::before,
+  .rank-row-icon::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(255, 214, 153, 0.55), rgba(255, 214, 153, 0));
+    z-index: -1;
+  }
+
+  .rank-row-icon::before {
+    inset: -4px;
+    background: radial-gradient(circle, rgba(214, 226, 235, 0.5), rgba(214, 226, 235, 0));
+  }
 }
 
 @media (max-width: 760px) {
@@ -2738,6 +2777,12 @@ a {
 .kpi strong.fee-player-name {
   font-size: 14px;
   font-weight: 600;
+}
+
+.fee-edit-button {
+  background: linear-gradient(135deg, #f4a142, #ff7a1a);
+  color: #fffaf4;
+  box-shadow: 0 10px 18px rgba(232, 114, 27, 0.25);
 }
 
 .match-modal-head {

@@ -31,9 +31,6 @@
           <button v-if="session && session.status === 'open'" class="button ghost button-compact" @click="closeSession">
             Close Session
           </button>
-          <button v-if="session && session.status === 'open'" class="button ghost button-compact" @click="openEditFee">
-            Edit Fee
-          </button>
         </div>
       </div>
 

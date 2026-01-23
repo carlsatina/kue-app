@@ -1,6 +1,6 @@
 # Kue App
 
-Mobile‑first queueing system for badminton / pickleball / tennis clubs.
+Multi‑session, mobile‑first queue + court management system for badminton / pickleball / tennis clubs.
 
 ## Stack
 - Frontend: Vue 3 + Vite
@@ -50,11 +50,13 @@ Frontend `.env`:
 - `VITE_API_URL` (default `http://localhost:4000/api`)
 
 ## Notes
+- Multiple sessions can be open at once; use the header session switcher to change context.
 - Public share pages:
   - Player status: `/p/:token`
-  - Queue view: `/q/:token`
+  - Queue view: `/q/:token` (includes live courts + bracket modal)
   - Session board: `/board/:sessionId`
 - Rankings live at `/rankings`.
 
 ## Docs
 - `docs/mvp.md` – requirements, DB schema, API spec, UI notes, testing plan
+- `docs/app-overview.md` – implementation‑based product overview
