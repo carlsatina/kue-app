@@ -83,7 +83,7 @@
               <button
                 v-if="showMarkPresent"
                 class="button secondary button-compact"
-                :disabled="selectedIds.length === 0"
+                :disabled="selectedIds.length === 0 || !sessionIsOpen"
                 @click="markPresent"
               >
                 Mark Present
@@ -263,6 +263,25 @@
         </div>
       </div>
     </div>
+    <div v-if="showSinglesQueueModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3>Queue singles match</h3>
+        <div class="subtitle">Confirm these players.</div>
+        <div class="singles-match-row">
+          <div v-if="singlesQueueOrder[0]" class="singles-pill singles-pill-a">
+            {{ playerNameById(singlesQueueOrder[0]) }}
+          </div>
+          <div class="singles-vs">vs</div>
+          <div v-if="singlesQueueOrder[1]" class="singles-pill singles-pill-b">
+            {{ playerNameById(singlesQueueOrder[1]) }}
+          </div>
+        </div>
+        <div class="grid two">
+          <button class="button" @click="confirmSinglesQueueAdd">Add to Queue</button>
+          <button class="button ghost" @click="closeSinglesQueueModal">Cancel</button>
+        </div>
+      </div>
+    </div>
     <div v-if="showPairingModal" class="modal-backdrop">
       <div class="modal-card pairing-modal">
         <div class="section-title">Pair teams</div>
@@ -329,6 +348,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "../api.js";
+import { selectedSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const activeTab = ref("players");
 const players = ref([]);
@@ -351,6 +371,7 @@ const historySearch = ref("");
 const showDisplayMenu = ref(false);
 const showJoinOrder = ref(true);
 const displayMenuRef = ref(null);
+const sessionIsOpen = computed(() => session.value?.status === "open");
 const showEditPlayer = ref(false);
 const editPlayerId = ref("");
 const editPlayerName = ref("");
@@ -373,10 +394,17 @@ const lastPairingSignature = ref("");
 const pairingSelectedIndex = ref(null);
 let pairingDragState = null;
 let pairingDragEndedAt = 0;
+const showSinglesQueueModal = ref(false);
+const singlesQueueOrder = ref([]);
+const lastSinglesSignature = ref("");
 
 const skillLevels = ["Beginner", "Intermediate", "Upper Intermediate"];
 
-const sessionGameType = computed(() => session.value?.gameType || "doubles");
+const sessionGameType = computed(() => {
+  const raw = session.value?.gameType || "doubles";
+  const normalized = typeof raw === "string" ? raw.toLowerCase() : "doubles";
+  return normalized === "single" ? "singles" : normalized;
+});
 const sessionGameTypeLabel = computed(() =>
   sessionGameType.value === "singles" ? "Singles" : "Doubles"
 );
@@ -482,8 +510,15 @@ const canAdd = computed(() => selectedIds.value.length === selectionLimit.value 
 
 const queueMatchCount = computed(() => queueMatches.value.length);
 
+function isReadyForPresent(sp) {
+  if (!sp) return false;
+  if (sp.status === "ready") return true;
+  if (sp.status === "checked_in") return !sp.lastPlayedAt;
+  return false;
+}
+
 const showMarkPresent = computed(() =>
-  selectedIds.value.some((playerId) => sessionPlayerMap.value.get(playerId)?.status === "checked_in")
+  selectedIds.value.some((playerId) => isReadyForPresent(sessionPlayerMap.value.get(playerId)))
 );
 const duplicateWarningText = computed(() => {
   if (!duplicateWarningNames.value.length) {
@@ -583,7 +618,7 @@ function statusLabel(player) {
   if (sp.status === "away") return "Away";
   if (sp.status === "done") return "Done";
   if (sp.status === "present") return "Present";
-  if (sp.status === "checked_in") {
+  if (sp.status === "checked_in" || sp.status === "ready") {
     if (sp.lastPlayedAt) {
       const elapsed = idleElapsed(sp);
       return `Idle ${elapsed}`;
@@ -601,7 +636,7 @@ function statusClass(player) {
   if (sp.status === "away") return "away";
   if (sp.status === "done") return "done";
   if (sp.status === "present") return "present";
-  if (sp.status === "checked_in") {
+  if (sp.status === "checked_in" || sp.status === "ready") {
     return sp.lastPlayedAt ? "idle" : "checkedin";
   }
   return "neutral";
@@ -633,24 +668,39 @@ function clearSelection() {
 
 async function load() {
   players.value = await api.listPlayers();
-  try {
-    const activeSession = await api.activeSession();
-    session.value = activeSession;
-    if (!activeSession) {
-      queueEntries.value = [];
-      sessionPlayers.value = [];
-      matches.value = [];
-      return;
+  let currentSession = null;
+  if (selectedSessionId.value) {
+    try {
+      currentSession = await api.session(selectedSessionId.value);
+    } catch {
+      setSelectedSessionId("");
     }
-    queueEntries.value = await api.getQueue(activeSession.id);
-    sessionPlayers.value = await api.sessionPlayers(activeSession.id);
-    matches.value = await api.matchHistory(activeSession.id);
-  } catch {
-    session.value = null;
+  }
+  if (!currentSession) {
+    try {
+      currentSession = await api.activeSession();
+    } catch {
+      currentSession = null;
+    }
+    if (currentSession?.id) setSelectedSessionId(currentSession.id);
+  }
+  session.value = currentSession;
+  if (!currentSession) {
     queueEntries.value = [];
     sessionPlayers.value = [];
     matches.value = [];
+    return;
   }
+
+  const [queueResult, playersResult, matchesResult] = await Promise.allSettled([
+    api.getQueue(currentSession.id),
+    api.sessionPlayers(currentSession.id),
+    api.matchHistory(currentSession.id)
+  ]);
+
+  queueEntries.value = queueResult.status === "fulfilled" ? queueResult.value : [];
+  sessionPlayers.value = playersResult.status === "fulfilled" ? playersResult.value : [];
+  matches.value = matchesResult.status === "fulfilled" ? matchesResult.value : [];
 }
 
 async function addPlayer() {
@@ -661,7 +711,7 @@ async function addPlayer() {
   }
   try {
     const created = await api.createPlayer({ fullName: fullName.value.trim(), skillLevel: skillLevel.value });
-    if (session.value?.id) {
+    if (session.value?.id && sessionIsOpen.value) {
       await api.checkinPlayer(created.id, { sessionId: session.value.id });
     }
     fullName.value = "";
@@ -675,14 +725,17 @@ async function ensureCheckedIn(playerIds) {
   if (!session.value) return;
   for (const playerId of playerIds) {
     const sp = sessionPlayerMap.value.get(playerId);
-    if (!sp || (sp.status !== "checked_in" && sp.status !== "present")) {
+    if (!sp || (sp.status !== "checked_in" && sp.status !== "present" && sp.status !== "ready")) {
       await api.checkinPlayer(playerId, { sessionId: session.value.id });
     }
   }
 }
 
 async function addToQueue() {
-  if (!session.value) return;
+  if (!session.value || !sessionIsOpen.value) {
+    queueError.value = "Session is not open.";
+    return;
+  }
   queueError.value = "";
   removeError.value = "";
   presentError.value = "";
@@ -692,6 +745,10 @@ async function addToQueue() {
   }
 
   try {
+    if (sessionGameType.value === "singles" && selectedIds.value.length === 2) {
+      if (!showSinglesQueueModal.value) openSinglesQueueModal();
+      return;
+    }
     if (sessionGameType.value === "doubles" && selectedIds.value.length === 4) {
       openPairingModal();
       return;
@@ -703,26 +760,31 @@ async function addToQueue() {
 }
 
 async function markPresent() {
-  if (!session.value || selectedIds.value.length === 0) return;
+  if (!session.value || !sessionIsOpen.value || selectedIds.value.length === 0) return;
   presentError.value = "";
   try {
-    for (const playerId of selectedIds.value) {
+    const readyIds = selectedIds.value.filter((playerId) =>
+      isReadyForPresent(sessionPlayerMap.value.get(playerId))
+    );
+    if (readyIds.length === 0) return;
+    for (const playerId of readyIds) {
       await api.presentPlayer(playerId, { sessionId: session.value.id });
     }
     await load();
+    clearSelection();
   } catch (err) {
     presentError.value = err.message || "Unable to mark present";
   }
 }
 
 async function removeEntry(entryId) {
-  if (!session.value) return;
+  if (!session.value || !sessionIsOpen.value) return;
   await api.dequeue(session.value.id, { entryId });
   await load();
 }
 
 async function assignMatch(match, court) {
-  if (!session.value) return;
+  if (!session.value || !sessionIsOpen.value) return;
   await api.startMatch(session.value.id, {
     courtSessionId: court.id,
     matchType: match.matchType,
@@ -733,7 +795,7 @@ async function assignMatch(match, court) {
 }
 
 async function cancelQueuedMatch(match) {
-  if (!session.value) return;
+  if (!session.value || !sessionIsOpen.value) return;
   cancelMatchTarget.value = match;
   showCancelConfirm.value = true;
 }
@@ -938,6 +1000,16 @@ function closeRemoveConfirm() {
   removeConfirmNames.value = [];
 }
 
+function openSinglesQueueModal() {
+  singlesQueueOrder.value = selectedIds.value.slice(0, 2);
+  showSinglesQueueModal.value = true;
+}
+
+function closeSinglesQueueModal() {
+  showSinglesQueueModal.value = false;
+  singlesQueueOrder.value = [];
+}
+
 function openPairingModal() {
   pairingOrder.value = selectedIds.value.slice();
   draggingPairIndex.value = null;
@@ -966,6 +1038,18 @@ async function confirmPairingAdd() {
     draggingPairIndex.value = null;
     pairingHoverIndex.value = null;
     pairingSelectedIndex.value = null;
+  }
+}
+
+async function confirmSinglesQueueAdd() {
+  if (!session.value || singlesQueueOrder.value.length !== 2) return;
+  showSinglesQueueModal.value = false;
+  try {
+    await attemptQueue(singlesQueueOrder.value);
+  } catch (err) {
+    queueError.value = err.message || "Unable to add to queue";
+  } finally {
+    singlesQueueOrder.value = [];
   }
 }
 
@@ -1111,6 +1195,18 @@ async function attemptQueue(order) {
 watch(
   () => selectedIds.value.join("|"),
   (signature) => {
+    if (sessionGameType.value === "singles") {
+      if (selectedIds.value.length !== 2) {
+        if (showSinglesQueueModal.value) closeSinglesQueueModal();
+        return;
+      }
+      if (showSinglesQueueModal.value) return;
+      if (signature && signature !== lastSinglesSignature.value) {
+        lastSinglesSignature.value = signature;
+        openSinglesQueueModal();
+      }
+      return;
+    }
     if (sessionGameType.value !== "doubles") return;
     if (selectedIds.value.length !== 4) return;
     if (showPairingModal.value) return;
@@ -1121,9 +1217,9 @@ watch(
   }
 );
 
-watch(showPairingModal, (isOpen) => {
-  document.body.style.overflow = isOpen ? "hidden" : "";
-  if (!isOpen) {
+watch([showPairingModal, showSinglesQueueModal], ([pairingOpen, singlesOpen]) => {
+  document.body.style.overflow = pairingOpen || singlesOpen ? "hidden" : "";
+  if (!pairingOpen) {
     cleanupPairDrag();
   }
 });
@@ -1150,6 +1246,13 @@ async function confirmRemoveSelected() {
 
 watch(sessionGameType, () => {
   selectedIds.value = [];
+  lastSinglesSignature.value = "";
+  lastPairingSignature.value = "";
+});
+
+watch(selectedSessionId, () => {
+  selectedIds.value = [];
+  load();
 });
 
 onMounted(() => {

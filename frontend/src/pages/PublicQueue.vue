@@ -43,21 +43,41 @@
         <span class="queue-section-badge">{{ data.courts?.length || 0 }} courts</span>
       </div>
       <div v-if="data.courts?.length === 0" class="subtitle">No courts yet.</div>
-      <div v-for="court in data.courts || []" :key="court.court.id" class="queue-court-card">
-        <div class="queue-court-head">
-          <strong>{{ court.court.name }}</strong>
-          <span class="queue-status-pill" :class="court.status">{{ statusLabel(court.status) }}</span>
-        </div>
-        <div class="queue-court-body">
-          <div v-if="court.currentMatch" class="queue-now-vs">
-            <span class="queue-now-pill team-a">{{ teamLabel(court.currentMatch, 1) }}</span>
-            <span class="queue-now-divider">vs</span>
-            <span class="queue-now-pill team-b">{{ teamLabel(court.currentMatch, 2) }}</span>
+      <div v-else class="grid courts-grid">
+        <div
+          v-for="court in data.courts || []"
+          :key="court.court.id"
+          class="card court-card"
+          :class="{ playing: court.currentMatch }"
+        >
+          <div class="court-head">
+            <div class="court-title">
+              <strong class="court-name">{{ court.court.name }}</strong>
+            </div>
+            <span class="badge court-status" :class="courtStatusClass(court)">
+              {{ statusLabel(court.status) }}
+            </span>
           </div>
-          <span v-else class="subtitle">Open</span>
-          <div v-if="court.currentMatch" class="queue-time-row">
-            <span>Started {{ formatTime(court.currentMatch.startedAt) }}</span>
-            <span>Elapsed {{ elapsedTime(court.currentMatch.startedAt) }}</span>
+
+          <div class="court-meta">
+            <div class="court-meta-block">
+              <div class="subtitle">Start</div>
+              <strong>{{ formatTime(court.currentMatch?.startedAt) }}</strong>
+            </div>
+            <div class="court-meta-block">
+              <div class="subtitle">Elapsed</div>
+              <strong>{{ elapsedTime(court.currentMatch?.startedAt) }}</strong>
+            </div>
+          </div>
+
+          <div class="court-players">
+            <div class="subtitle">Players</div>
+            <div v-if="court.currentMatch" class="pill-row court-pill-row">
+              <span class="pill team-a">{{ teamLabel(court.currentMatch, 1) || "—" }}</span>
+              <span class="court-vs">vs</span>
+              <span class="pill team-b">{{ teamLabel(court.currentMatch, 2) || "—" }}</span>
+            </div>
+            <div v-else class="subtitle muted">No match yet</div>
           </div>
         </div>
       </div>
@@ -98,18 +118,19 @@
       </div>
       <div v-if="rankedPlayers.length === 0" class="subtitle">No stats yet.</div>
       <div v-else class="rank-modal-body">
-        <div v-for="player in rankedPlayers" :key="player.playerId" class="rank-card">
-          <div class="rank-left">
-            <div class="rank-badge" :class="rankClass(player.rank)">{{ player.rank }}</div>
-            <div>
-              <strong>{{ player.player.nickname || player.player.fullName }}</strong>
+        <div v-for="player in rankedPlayers" :key="player.playerId" class="rank-row">
+          <div class="rank-row-left">
+            <div class="rank-row-badge" :class="rankClass(player.rank)">
+              <span class="rank-number">{{ player.rank }}</span>
             </div>
+            <div class="rank-row-name">{{ player.player.nickname || player.player.fullName }}</div>
           </div>
-          <div class="rank-stats">
-            <div class="rank-pill">GP {{ player.gamesPlayed }}</div>
-            <div class="rank-pill win">W {{ player.wins }}</div>
-            <div class="rank-pill loss">L {{ player.losses }}</div>
-            <div class="rank-pill pct">{{ winPct(player.winPct) }}</div>
+          <div class="rank-row-icon">{{ rankCornerIcon(player.rank) }}</div>
+          <div class="rank-row-stats">
+            <span class="rank-pill">GP {{ player.gamesPlayed }}</span>
+            <span class="rank-pill win">W {{ player.wins }}</span>
+            <span class="rank-pill loss">L {{ player.losses }}</span>
+            <span class="rank-pill pct">{{ winPct(player.winPct) }}</span>
           </div>
         </div>
       </div>
@@ -176,6 +197,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { TournamentBracket } from "vue3-tournament";
+import { applySeedOrder, extractSeedOrder } from "../utils/seedOrder.js";
 import "vue3-tournament/style.css";
 import { api } from "../api.js";
 import { useRoute } from "vue-router";
@@ -220,11 +242,19 @@ const bracketJoinedPlayers = computed(() => {
     }));
 });
 
+const bracketSeedOrderIds = computed(() =>
+  extractSeedOrder(bracketOverrides.value, bracketMatchFormat.value)
+);
+
+const bracketSeededPlayers = computed(() =>
+  applySeedOrder(bracketJoinedPlayers.value, bracketSeedOrderIds.value)
+);
+
 const bracketEntrants = computed(() => {
   if (bracketMatchFormat.value === "doubles") {
     return buildTeamEntrants(bracketJoinedPlayers.value, []);
   }
-  return bracketJoinedPlayers.value;
+  return bracketSeededPlayers.value;
 });
 
 const bracketEntrantKeys = computed(() => {
@@ -328,6 +358,12 @@ function statusLabel(status) {
   return status || "—";
 }
 
+function courtStatusClass(court) {
+  if (court.status === "maintenance") return "warning";
+  if (court.currentMatch || court.status === "in_match" || court.status === "occupied") return "live";
+  return "";
+}
+
 function winPct(value) {
   const pct = Math.round((value || 0) * 100);
   return `${pct}%`;
@@ -338,6 +374,13 @@ function rankClass(rank) {
   if (rank === 2) return "silver";
   if (rank === 3) return "bronze";
   return "neutral";
+}
+
+function rankCornerIcon(rank) {
+  if (rank === 1) return "🏆";
+  if (rank === 2) return "🥈";
+  if (rank === 3) return "🥉";
+  return "⭐";
 }
 
 async function load() {

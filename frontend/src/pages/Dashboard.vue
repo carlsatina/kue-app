@@ -1,7 +1,7 @@
 <template>
   <div class="page-grid with-sidebar">
     <div class="page-main stack">
-      <div class="card stack session-compact" :class="{ 'session-create': !session }">
+      <div class="card stack session-compact">
         <div class="kpi">
           <div>
             <div class="subtitle">Active Session</div>
@@ -11,41 +11,29 @@
             {{ session?.status || 'closed' }}
           </span>
         </div>
-        <div v-if="!session" class="stack">
-          <div class="field">
-            <label class="field-label">Session name</label>
-            <input class="input" v-model="newSessionName" />
-          </div>
-          <div class="field">
-            <label class="field-label">Game type</label>
-            <select class="input" v-model="newGameType">
-              <option value="doubles">Doubles</option>
-              <option value="singles">Singles</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="field-label">Fee amount</label>
-            <input class="input" v-model.number="feeAmount" type="number" min="0" />
-          </div>
-          <div class="join-limits-row">
-            <div class="field field-inline">
-              <label class="field-label">Regular</label>
-              <input class="input" type="number" min="0" v-model.number="regularJoinLimit" />
-            </div>
-            <div class="field field-inline">
-              <label class="field-label">New joiner</label>
-              <input class="input" type="number" min="0" v-model.number="newJoinerLimit" />
-            </div>
-          </div>
-          <button class="button" @click="createSession">Create Session</button>
-        </div>
-        <div v-else class="stack">
-          <div class="session-actions">
-            <button class="button button-compact" @click="refresh">Refresh</button>
-            <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
-            <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
-            <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
-          </div>
+        <div v-if="!session" class="subtitle">No session selected.</div>
+        <div class="session-actions">
+          <button class="button button-compact" @click="openCreateSession">Add Session</button>
+          <button
+            v-if="session"
+            class="button ghost button-compact"
+            @click="openEditSession"
+          >
+            Edit Session
+          </button>
+          <button
+            v-if="session && session.status !== 'open'"
+            class="button secondary button-compact"
+            @click="openSession"
+          >
+            Open
+          </button>
+          <button v-if="session && session.status === 'open'" class="button ghost button-compact" @click="closeSession">
+            Close Session
+          </button>
+          <button v-if="session && session.status === 'open'" class="button ghost button-compact" @click="openEditFee">
+            Edit Fee
+          </button>
         </div>
       </div>
 
@@ -57,51 +45,83 @@
             <button class="button ghost" @click="showAddCourt = true">Add Court</button>
           </div>
         </div>
-        <div class="grid two">
-          <div v-for="court in courts" :key="court.id" class="card court-card">
-            <div class="kpi">
+        <div v-if="courts.length" class="grid courts-grid">
+          <div
+            v-for="court in courts"
+            :key="court.id"
+            class="card court-card"
+            :class="{ playing: court.currentMatchId }"
+          >
+            <div class="court-head">
               <div class="court-title">
                 <strong class="court-name">{{ court.court?.name || court.name }}</strong>
-                <button class="icon-button" @click="openEditCourt(court)" aria-label="Edit court">
-                  <svg viewBox="0 0 24 24" role="img">
-                    <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
-                  </svg>
-                </button>
-                <button class="icon-button danger" @click="deleteCourt(court)" aria-label="Delete court">
-                  <svg viewBox="0 0 24 24" role="img">
-                    <path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z"></path>
-                  </svg>
-                </button>
+                <div class="court-head-actions">
+                  <button class="icon-button" @click="openEditCourt(court)" aria-label="Edit court">
+                    <svg viewBox="0 0 24 24" role="img">
+                      <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
+                    </svg>
+                  </button>
+                  <button class="icon-button danger" @click="deleteCourt(court)" aria-label="Delete court">
+                    <svg viewBox="0 0 24 24" role="img">
+                      <path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <span class="badge" :class="court.status === 'maintenance' ? 'warning' : ''">
+              <span class="badge court-status" :class="courtStatusClass(court)">
                 {{ courtStatusLabel(court.status) }}
               </span>
             </div>
-            <div v-if="court.status === 'available'" class="inline-actions">
-              <button class="button ghost button-compact" @click="goToPlayers">Add Player</button>
+
+            <div class="court-meta">
+              <div class="court-meta-block">
+                <div class="subtitle">Start</div>
+                <strong>{{ formatTime(court.currentMatch?.startedAt) }}</strong>
+              </div>
+              <div class="court-meta-block">
+                <div class="subtitle">Elapsed</div>
+                <strong>{{ elapsedTime(court.currentMatch?.startedAt) }}</strong>
+              </div>
             </div>
-            <template v-else>
-              <div class="subtitle">Now Playing:</div>
-              <div v-if="court.currentMatch" class="pill-row">
-                <span class="pill team-a">{{ teamNames(court.currentMatch, 1) }}</span>
-                <span class="pill team-b">{{ teamNames(court.currentMatch, 2) }}</span>
+
+            <div class="court-players">
+              <div class="subtitle">Players</div>
+              <div v-if="court.currentMatch" class="pill-row court-pill-row">
+                <span class="pill team-a">{{ teamNames(court.currentMatch, 1) || "—" }}</span>
+                <span class="court-vs">vs</span>
+                <span class="pill team-b">{{ teamNames(court.currentMatch, 2) || "—" }}</span>
               </div>
-              <div v-else class="subtitle">Open</div>
-              <div v-if="court.currentMatch" class="time-row">
-                <span class="subtitle">Started: {{ formatTime(court.currentMatch.startedAt) }}</span>
-                <span class="subtitle">Elapsed: {{ elapsedTime(court.currentMatch.startedAt) }}</span>
-              </div>
-              <div class="inline-actions">
-                <button class="button ghost button-compact danger" @click="cancelMatch(court)" :disabled="!court.currentMatchId">
+              <div v-else class="subtitle muted">No match yet</div>
+            </div>
+
+            <div class="court-actions-row">
+              <button
+                v-if="court.status === 'available'"
+                class="button ghost button-compact"
+                @click="goToPlayers"
+              >
+                Add Player
+              </button>
+              <div v-else class="court-match-actions">
+                <button
+                  class="button ghost button-compact danger"
+                  @click="cancelMatch(court)"
+                  :disabled="!court.currentMatchId"
+                >
                   Cancel Match
                 </button>
-                <button class="button button-compact" @click="openEndMatch(court)" :disabled="!court.currentMatchId">
+                <button
+                  class="button button-compact"
+                  @click="openEndMatch(court)"
+                  :disabled="!court.currentMatchId"
+                >
                   Complete Match
                 </button>
               </div>
-            </template>
+            </div>
           </div>
         </div>
+        <div v-else class="subtitle">No courts available.</div>
         <div v-if="error" class="notice" style="margin-top:12px;">{{ error }}</div>
       </div>
     </div>
@@ -273,19 +293,6 @@
       <button class="button ghost" @click="closeRoster">Close</button>
     </div>
   </div>
-  <div v-if="showReopenConfirm" class="modal-backdrop">
-    <div class="modal-card">
-      <h3>Reopen Session</h3>
-      <div class="subtitle">
-        Another session is currently open. Close the active session and reopen
-        <strong>{{ reopenTarget?.name }}</strong>?
-      </div>
-      <div class="grid two">
-        <button class="button ghost" @click="cancelReopen">Cancel</button>
-        <button class="button" @click="confirmReopen">Yes, Reopen</button>
-      </div>
-    </div>
-  </div>
   <div v-if="showDeleteSession" class="modal-backdrop">
     <div class="modal-card">
       <h3>Delete Session</h3>
@@ -299,12 +306,83 @@
       </div>
     </div>
   </div>
+  <div v-if="showCreateSession" class="modal-backdrop">
+    <div class="modal-card session-create">
+      <h3>Create Session</h3>
+      <div class="field">
+        <label class="field-label">Session name</label>
+        <input class="input" v-model="newSessionName" />
+      </div>
+      <div class="field">
+        <label class="field-label">Game type</label>
+        <select class="input" v-model="newGameType">
+          <option value="doubles">Doubles</option>
+          <option value="singles">Singles</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Fee amount</label>
+        <input class="input" v-model.number="feeAmount" type="number" min="0" />
+      </div>
+      <div class="join-limits-row">
+        <div class="field field-inline">
+          <label class="field-label">Regular</label>
+          <input class="input" type="number" min="0" v-model.number="regularJoinLimit" />
+        </div>
+        <div class="field field-inline">
+          <label class="field-label">New joiner</label>
+          <input class="input" type="number" min="0" v-model.number="newJoinerLimit" />
+        </div>
+      </div>
+      <div v-if="createError" class="notice">{{ createError }}</div>
+      <div class="grid two">
+        <button class="button ghost" @click="closeCreateSession">Cancel</button>
+        <button class="button" @click="createSession">Create Session</button>
+      </div>
+    </div>
+  </div>
+  <div v-if="showEditSession" class="modal-backdrop">
+    <div class="modal-card session-create">
+      <h3>Edit Session</h3>
+      <div class="field">
+        <label class="field-label">Session name</label>
+        <input class="input" v-model="editSessionName" />
+      </div>
+      <div class="field">
+        <label class="field-label">Game type</label>
+        <select class="input" v-model="editGameType">
+          <option value="doubles">Doubles</option>
+          <option value="singles">Singles</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">Fee amount</label>
+        <input class="input" v-model.number="editSessionFeeAmount" type="number" min="0" />
+      </div>
+      <div class="join-limits-row">
+        <div class="field field-inline">
+          <label class="field-label">Regular</label>
+          <input class="input" type="number" min="0" v-model.number="editRegularJoinLimit" />
+        </div>
+        <div class="field field-inline">
+          <label class="field-label">New joiner</label>
+          <input class="input" type="number" min="0" v-model.number="editNewJoinerLimit" />
+        </div>
+      </div>
+      <div v-if="editSessionError" class="notice">{{ editSessionError }}</div>
+      <div class="grid two">
+        <button class="button ghost" @click="closeEditSession">Cancel</button>
+        <button class="button" @click="saveEditSession">Save</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "../api.js";
 import { useRouter } from "vue-router";
+import { selectedSessionId, setPendingSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const session = ref(null);
 const courts = ref([]);
@@ -340,8 +418,6 @@ const pastSessions = ref([]);
 const showRoster = ref(false);
 const rosterPlayers = ref([]);
 const rosterSession = ref(null);
-const showReopenConfirm = ref(false);
-const reopenTarget = ref(null);
 const showPastSessions = ref(false);
 const showEditFee = ref(false);
 const editFeeAmount = ref(0);
@@ -354,10 +430,30 @@ let inviteCopyTimer = null;
 const showDeleteSession = ref(false);
 const deleteSessionTarget = ref(null);
 const deleteSessionError = ref("");
+const showCreateSession = ref(false);
+const createError = ref("");
+const showEditSession = ref(false);
+const editSessionName = ref("");
+const editGameType = ref("doubles");
+const editSessionFeeAmount = ref(0);
+const editRegularJoinLimit = ref(0);
+const editNewJoinerLimit = ref(0);
+const editSessionError = ref("");
 
 async function refresh() {
   try {
-    const sessionData = await api.activeSession();
+    let sessionData = null;
+    if (selectedSessionId.value) {
+      try {
+        sessionData = await api.session(selectedSessionId.value);
+      } catch {
+        setSelectedSessionId("");
+      }
+    }
+    if (!sessionData) {
+      sessionData = await api.activeSession();
+      if (sessionData?.id) setSelectedSessionId(sessionData.id);
+    }
     if (!sessionData) {
       session.value = null;
       courts.value = [];
@@ -395,6 +491,8 @@ async function refresh() {
     pastSessions.value = await api.listSessions("closed");
     regularJoinLimit.value = 0;
     newJoinerLimit.value = 0;
+  } finally {
+    window.dispatchEvent(new Event("sessions:updated"));
   }
 }
 
@@ -454,6 +552,7 @@ async function saveEditFee() {
 }
 
 async function createSession() {
+  createError.value = "";
   try {
     const created = await api.createSession({
       name: newSessionName.value,
@@ -464,9 +563,56 @@ async function createSession() {
       newJoinerLimit: Math.max(0, Number(newJoinerLimit.value) || 0)
     });
     await api.openSession(created.id);
+    setPendingSessionId(created.id);
+    setSelectedSessionId(created.id);
+    showCreateSession.value = false;
     await refresh();
   } catch (err) {
-    error.value = err.message || "Unable to create session";
+    createError.value = err.message || "Unable to create session";
+  }
+}
+
+function openCreateSession() {
+  createError.value = "";
+  showCreateSession.value = true;
+}
+
+function closeCreateSession() {
+  showCreateSession.value = false;
+  createError.value = "";
+}
+
+function openEditSession() {
+  if (!session.value) return;
+  editSessionError.value = "";
+  editSessionName.value = session.value.name || "";
+  editGameType.value = session.value.gameType || "doubles";
+  editSessionFeeAmount.value = Number(session.value.feeAmount || 0);
+  editRegularJoinLimit.value = Number(session.value.regularJoinLimit || 0);
+  editNewJoinerLimit.value = Number(session.value.newJoinerLimit || 0);
+  showEditSession.value = true;
+}
+
+function closeEditSession() {
+  showEditSession.value = false;
+  editSessionError.value = "";
+}
+
+async function saveEditSession() {
+  if (!session.value) return;
+  editSessionError.value = "";
+  try {
+    await api.updateSession(session.value.id, {
+      name: editSessionName.value,
+      gameType: editGameType.value,
+      feeAmount: Number(editSessionFeeAmount.value || 0),
+      regularJoinLimit: Math.max(0, Number(editRegularJoinLimit.value) || 0),
+      newJoinerLimit: Math.max(0, Number(editNewJoinerLimit.value) || 0)
+    });
+    showEditSession.value = false;
+    await refresh();
+  } catch (err) {
+    editSessionError.value = err.message || "Unable to update session";
   }
 }
 
@@ -565,6 +711,12 @@ function courtStatusLabel(status) {
   return status || "—";
 }
 
+function courtStatusClass(court) {
+  if (court.status === "maintenance") return "warning";
+  if (court.currentMatchId || court.status === "in_match" || court.status === "occupied") return "live";
+  return "";
+}
+
 function courtSortName(courtSession) {
   return (courtSession?.court?.name || courtSession?.name || "").trim();
 }
@@ -640,28 +792,8 @@ function closeRoster() {
 }
 
 async function reopenSession(sessionItem) {
-  reopenTarget.value = sessionItem;
-  if (session.value && session.value.status === "open") {
-    showReopenConfirm.value = true;
-    return;
-  }
-  await confirmReopen();
-}
-
-function cancelReopen() {
-  showReopenConfirm.value = false;
-  reopenTarget.value = null;
-}
-
-async function confirmReopen() {
-  if (!reopenTarget.value) return;
   try {
-    if (session.value && session.value.status === "open") {
-      await api.closeSession(session.value.id);
-    }
-    await api.openSession(reopenTarget.value.id);
-    showReopenConfirm.value = false;
-    reopenTarget.value = null;
+    await api.openSession(sessionItem.id);
     await refresh();
   } catch (err) {
     error.value = err.message || "Unable to reopen session";
@@ -758,5 +890,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timerId) clearInterval(timerId);
+});
+
+watch(selectedSessionId, () => {
+  refresh();
 });
 </script>

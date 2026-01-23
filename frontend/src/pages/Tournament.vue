@@ -110,6 +110,13 @@
             <div class="subtitle">{{ matchFormatLabel }}</div>
           </div>
         </div>
+        <div v-if="session && matchFormat === 'singles'" class="seed-summary">
+          <div>
+            <div class="subtitle">Seeding</div>
+            <strong>{{ seedOrderActive ? "Manual" : "Join order" }}</strong>
+          </div>
+          <button class="button ghost button-compact" @click="openSeedModal">Arrange</button>
+        </div>
         <div v-if="session && matchFormat === 'doubles'" class="team-builder-summary">
           <div>
             <div class="subtitle">Team Builder</div>
@@ -185,6 +192,34 @@
       </div>
     </div>
   </div>
+  <div v-if="showSeedModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Arrange Singles Seeds</h3>
+      <div class="subtitle">Reorder players to set bracket seeding.</div>
+      <div class="seed-list">
+        <div
+          v-for="(playerId, index) in seedDraftIds"
+          :key="playerId"
+          class="seed-row"
+          :data-index="index"
+          :class="{ dragging: seedDraggingIndex === index, hover: seedHoverIndex === index }"
+        >
+          <div class="seed-handle" aria-hidden="true" @pointerdown.prevent="onSeedPointerDown(index, $event)">
+            <svg viewBox="0 0 24 24" role="img">
+              <path d="M7 5h2v2H7V5zm8 0h2v2h-2V5zM7 11h2v2H7v-2zm8 0h2v2h-2v-2zM7 17h2v2H7v-2zm8 0h2v2h-2v-2z"></path>
+            </svg>
+          </div>
+          <div class="seed-index">{{ index + 1 }}</div>
+          <div class="seed-name">{{ seedName(playerId) }}</div>
+        </div>
+      </div>
+      <div class="grid two">
+        <button class="button ghost" @click="closeSeedModal">Cancel</button>
+        <button class="button" @click="saveSeedOrder">Save</button>
+      </div>
+      <button class="button ghost button-compact" @click="useJoinOrder">Use join order</button>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -193,6 +228,8 @@ import { TournamentBracket } from "vue3-tournament";
 import "vue3-tournament/style.css";
 import { api } from "../api.js";
 import { loadManualTeams, saveManualTeams } from "../utils/teamBuilder.js";
+import { SEED_MATCH_ID, applySeedOrder, extractSeedOrder } from "../utils/seedOrder.js";
+import { selectedSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const session = ref(null);
 const sessionPlayers = ref([]);
@@ -216,6 +253,13 @@ const editTeamB = ref(null);
 const editScoreA = ref("");
 const editScoreB = ref("");
 const editWinnerId = ref(null);
+const showSeedModal = ref(false);
+const seedDraftIds = ref([]);
+const seedOrderIds = ref([]);
+const seedDraggingIndex = ref(null);
+const seedHoverIndex = ref(null);
+const seedBracketTypes = ["single", "double", "round_robin"];
+let seedDragState = null;
 
 const bracketVisuals = {
   format: "default",
@@ -237,11 +281,13 @@ const joinedPlayers = computed(() => {
     }));
 });
 
+const seededPlayers = computed(() => applySeedOrder(joinedPlayers.value, seedOrderIds.value));
+
 const entrants = computed(() => {
   if (matchFormat.value === "doubles") {
     return buildTeamEntrants(joinedPlayers.value, manualTeams.value);
   }
-  return joinedPlayers.value;
+  return seededPlayers.value;
 });
 
 const entrantKeys = computed(() => {
@@ -252,6 +298,7 @@ const entrantKeys = computed(() => {
 });
 
 const matchResults = computed(() => buildMatchResults(matches.value));
+const seedOrderActive = computed(() => seedOrderIds.value.length > 0);
 
 const bracketData = computed(() => {
   if (!session.value) return null;
@@ -283,18 +330,25 @@ const bracketData = computed(() => {
 async function load() {
   error.value = "";
   try {
-    const activeSession = await api.activeSession();
-    session.value = activeSession;
-    if (!activeSession) {
+    let currentSession = null;
+    if (selectedSessionId.value) {
+      currentSession = await api.session(selectedSessionId.value);
+    } else {
+      currentSession = await api.activeSession();
+      if (currentSession?.id) setSelectedSessionId(currentSession.id);
+    }
+    session.value = currentSession;
+    if (!currentSession) {
       sessionPlayers.value = [];
       matches.value = [];
       manualOverrides.value = {};
       manualTeams.value = [];
+      seedOrderIds.value = [];
       return;
     }
-    sessionPlayers.value = await api.sessionPlayers(activeSession.id);
-    matches.value = await api.matchHistory(activeSession.id);
-    manualTeams.value = loadManualTeams(activeSession.id);
+    sessionPlayers.value = await api.sessionPlayers(currentSession.id);
+    matches.value = await api.matchHistory(currentSession.id);
+    manualTeams.value = loadManualTeams(currentSession.id);
     await loadOverrides();
   } catch (err) {
     error.value = err.message || "Unable to load session";
@@ -303,6 +357,7 @@ async function load() {
     matches.value = [];
     manualOverrides.value = {};
     manualTeams.value = [];
+    seedOrderIds.value = [];
   }
 }
 
@@ -709,17 +764,20 @@ async function loadOverrides() {
   overrideError.value = "";
   try {
     const overrides = await api.bracketOverrides(session.value.id, {
-      bracketType: bracketType.value,
       matchFormat: matchFormat.value
     });
+    const list = overrides || [];
     const map = {};
-    (overrides || []).forEach((override) => {
+    list.forEach((override) => {
+      if (override.matchId === SEED_MATCH_ID) return;
+      if (override.bracketType !== bracketType.value) return;
       map[override.matchId] = {
         winnerId: override.winnerId ?? null,
         score: override.scoreJson ?? null
       };
     });
     manualOverrides.value = map;
+    seedOrderIds.value = extractSeedOrder(list, matchFormat.value);
   } catch (err) {
     overrideError.value = err.message || "Unable to load bracket overrides";
   }
@@ -752,6 +810,172 @@ async function removeOverride(matchId) {
     });
   } catch (err) {
     overrideError.value = err.message || "Unable to clear bracket override";
+  }
+}
+
+function openSeedModal() {
+  seedDraftIds.value = seededPlayers.value.map((player) => player.id);
+  showSeedModal.value = true;
+}
+
+function closeSeedModal() {
+  showSeedModal.value = false;
+  seedDraftIds.value = [];
+  cleanupSeedDrag();
+}
+
+function seedName(playerId) {
+  const player = joinedPlayers.value.find((item) => item.id === playerId);
+  return player ? player.name : "Unknown";
+}
+
+function onSeedPointerDown(index, event) {
+  if (!seedDraftIds.value[index]) return;
+  const row = event.currentTarget?.closest?.(".seed-row") || event.currentTarget;
+  if (!row) return;
+  const rect = row.getBoundingClientRect();
+  const ghost = row.cloneNode(true);
+  ghost.classList.add("seed-ghost");
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  document.body.appendChild(ghost);
+
+  seedDragState = {
+    originIndex: index,
+    pointerId: event.pointerId,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    ghost,
+    element: row
+  };
+  seedDraggingIndex.value = index;
+  seedHoverIndex.value = index;
+
+  try {
+    row.setPointerCapture(event.pointerId);
+  } catch {
+    // ignore capture errors
+  }
+
+  updateSeedGhostPosition(event.clientX, event.clientY);
+  window.addEventListener("pointermove", onSeedPointerMove);
+  window.addEventListener("pointerup", onSeedPointerUp);
+  window.addEventListener("pointercancel", onSeedPointerCancel);
+}
+
+function onSeedPointerMove(event) {
+  if (!seedDragState || event.pointerId !== seedDragState.pointerId) return;
+  if (!seedDragState.moved) {
+    const dx = Math.abs(event.clientX - seedDragState.startX);
+    const dy = Math.abs(event.clientY - seedDragState.startY);
+    if (dx > 4 || dy > 4) seedDragState.moved = true;
+  }
+  updateSeedGhostPosition(event.clientX, event.clientY);
+  const index = seedIndexFromPoint(event.clientX, event.clientY);
+  if (index != null) seedHoverIndex.value = index;
+}
+
+function onSeedPointerUp(event) {
+  const state = seedDragState;
+  if (!state || event.pointerId !== state.pointerId) return;
+  const originIndex = state.originIndex;
+  const dropIndex = seedHoverIndex.value;
+  const moved = Boolean(state.moved);
+  cleanupSeedDrag(event);
+  if (!moved || dropIndex == null || dropIndex === originIndex) return;
+  const next = seedDraftIds.value.slice();
+  const [movedId] = next.splice(originIndex, 1);
+  let targetIndex = dropIndex;
+  if (originIndex < targetIndex) targetIndex -= 1;
+  next.splice(targetIndex, 0, movedId);
+  seedDraftIds.value = next;
+}
+
+function onSeedPointerCancel(event) {
+  if (!seedDragState || event.pointerId !== seedDragState.pointerId) return;
+  cleanupSeedDrag(event);
+}
+
+function updateSeedGhostPosition(x, y) {
+  if (!seedDragState?.ghost) return;
+  seedDragState.ghost.style.transform = `translate(${x - seedDragState.offsetX}px, ${
+    y - seedDragState.offsetY
+  }px)`;
+}
+
+function seedIndexFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const row = el?.closest?.(".seed-row");
+  if (!row) return null;
+  const value = Number(row.dataset.index);
+  return Number.isFinite(value) ? value : null;
+}
+
+function cleanupSeedDrag(event) {
+  if (seedDragState?.element && seedDragState.pointerId != null && event?.pointerId != null) {
+    try {
+      seedDragState.element.releasePointerCapture(seedDragState.pointerId);
+    } catch {
+      // ignore release errors
+    }
+  }
+  if (seedDragState?.ghost) seedDragState.ghost.remove();
+  seedDragState = null;
+  seedDraggingIndex.value = null;
+  seedHoverIndex.value = null;
+  window.removeEventListener("pointermove", onSeedPointerMove);
+  window.removeEventListener("pointerup", onSeedPointerUp);
+  window.removeEventListener("pointercancel", onSeedPointerCancel);
+}
+
+async function saveSeedOrder() {
+  if (!session.value) return;
+  const nextIds = seedDraftIds.value.filter(Boolean);
+  overrideError.value = "";
+  try {
+    await Promise.all(
+      seedBracketTypes.map((type) =>
+        api.deleteBracketOverride(session.value.id, {
+          matchId: SEED_MATCH_ID,
+          bracketType: type,
+          matchFormat: matchFormat.value
+        })
+      )
+    );
+    await api.saveBracketOverride(session.value.id, {
+      matchId: SEED_MATCH_ID,
+      bracketType: bracketType.value,
+      matchFormat: matchFormat.value,
+      winnerId: null,
+      score: { seeds: nextIds }
+    });
+    seedOrderIds.value = nextIds;
+    showSeedModal.value = false;
+  } catch (err) {
+    overrideError.value = err.message || "Unable to save seed order";
+  }
+}
+
+async function useJoinOrder() {
+  if (!session.value) return;
+  overrideError.value = "";
+  try {
+    await Promise.all(
+      seedBracketTypes.map((type) =>
+        api.deleteBracketOverride(session.value.id, {
+          matchId: SEED_MATCH_ID,
+          bracketType: type,
+          matchFormat: matchFormat.value
+        })
+      )
+    );
+    seedOrderIds.value = [];
+    closeSeedModal();
+  } catch (err) {
+    overrideError.value = err.message || "Unable to reset seed order";
   }
 }
 
@@ -882,6 +1106,12 @@ watch([bracketType, matchFormat], () => {
   }
 });
 
+watch(joinedPlayers, (players) => {
+  if (!seedOrderIds.value.length) return;
+  const valid = new Set(players.map((player) => player.id));
+  seedOrderIds.value = seedOrderIds.value.filter((id) => valid.has(id));
+});
+
 onMounted(() => {
   load();
   refreshTimer = window.setInterval(load, 20000);
@@ -894,5 +1124,15 @@ onUnmounted(() => {
     refreshTimer = null;
   }
   document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  cleanupSeedDrag();
+});
+
+watch(selectedSessionId, load);
+
+watch(showSeedModal, (isOpen) => {
+  document.body.style.overflow = isOpen ? "hidden" : "";
+  if (!isOpen) {
+    cleanupSeedDrag();
+  }
 });
 </script>

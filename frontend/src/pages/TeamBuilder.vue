@@ -127,6 +127,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { api } from "../api.js";
 import { loadManualTeams, saveManualTeams } from "../utils/teamBuilder.js";
+import { selectedSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const session = ref(null);
 const sessionPlayers = ref([]);
@@ -166,15 +167,21 @@ const selectedTeamNames = computed(() => {
 async function load() {
   error.value = "";
   try {
-    const activeSession = await api.activeSession();
-    session.value = activeSession;
-    if (!activeSession) {
+    let currentSession = null;
+    if (selectedSessionId.value) {
+      currentSession = await api.session(selectedSessionId.value);
+    } else {
+      currentSession = await api.activeSession();
+      if (currentSession?.id) setSelectedSessionId(currentSession.id);
+    }
+    session.value = currentSession;
+    if (!currentSession) {
       sessionPlayers.value = [];
       manualTeams.value = [];
       return;
     }
-    sessionPlayers.value = await api.sessionPlayers(activeSession.id);
-    manualTeams.value = loadManualTeams(activeSession.id);
+    sessionPlayers.value = await api.sessionPlayers(currentSession.id);
+    manualTeams.value = loadManualTeams(currentSession.id);
   } catch (err) {
     error.value = err.message || "Unable to load session";
     session.value = null;
@@ -320,4 +327,6 @@ watch(
 );
 
 onMounted(load);
+
+watch(selectedSessionId, load);
 </script>

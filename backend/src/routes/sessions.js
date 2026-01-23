@@ -23,6 +23,15 @@ const feeSchema = z.object({
   feeAmount: z.number().nonnegative().optional()
 });
 
+const updateSessionSchema = z.object({
+  name: z.string().min(1).optional(),
+  gameType: z.enum(["singles", "doubles"]).optional(),
+  feeAmount: z.number().nonnegative().optional(),
+  regularJoinLimit: z.number().int().nonnegative().optional(),
+  newJoinerLimit: z.number().int().nonnegative().optional(),
+  announcements: z.string().optional()
+});
+
 const bracketOverrideSchema = z.object({
   matchId: z.string().min(1),
   bracketType: z.enum(["single", "double", "round_robin"]),
@@ -63,11 +72,6 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
 
 router.post("/:id/open", requireAuth, requireRole(["admin"]), async (req, res) => {
   const { id } = req.params;
-  const existingOpen = await prisma.session.findFirst({ where: { status: "open" } });
-  if (existingOpen && existingOpen.id !== id) {
-    return res.status(409).json({ error: "Another session is already open" });
-  }
-
   const session = await prisma.session.update({
     where: { id },
     data: { status: "open", closedAt: null }
@@ -116,7 +120,8 @@ router.delete("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
 
 router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const session = await prisma.session.findFirst({
-    where: { status: "open" }
+    where: { status: "open" },
+    orderBy: { createdAt: "desc" }
   });
   if (!session) {
     return res.json(null);
@@ -220,6 +225,38 @@ router.patch("/:id/fee", requireAuth, requireRole(["admin"]), async (req, res) =
       feeMode: parse.data.feeMode ?? session.feeMode,
       feeAmount: parse.data.feeAmount ?? session.feeAmount
     }
+  });
+  res.json(updated);
+});
+
+router.patch("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  const { id } = req.params;
+  const parse = updateSessionSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  const data = parse.data;
+  const updates = {
+    name: data.name,
+    gameType: data.gameType,
+    feeAmount: data.feeAmount,
+    regularJoinLimit: data.regularJoinLimit,
+    newJoinerLimit: data.newJoinerLimit,
+    announcements: data.announcements
+  };
+  const hasUpdates = Object.values(updates).some((value) => value !== undefined);
+  if (!hasUpdates) {
+    return res.status(400).json({ error: "No updates provided" });
+  }
+
+  const session = await prisma.session.findUnique({ where: { id } });
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  const updated = await prisma.session.update({
+    where: { id },
+    data: updates
   });
   res.json(updated);
 });

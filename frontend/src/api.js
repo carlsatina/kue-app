@@ -25,6 +25,7 @@ export const api = {
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   activeSession: () => request("/sessions/active"),
   listSessions: (status) => request(`/sessions${status ? `?status=${status}` : ""}`),
+  session: (id) => request(`/sessions/${id}`),
   sessionPlayers: (sessionId) => request(`/sessions/${sessionId}/players`),
   rankings: (sessionId) => request(`/sessions/${sessionId}/rankings`),
   bracketOverrides: (sessionId, params = {}) => {
@@ -45,6 +46,7 @@ export const api = {
   openSession: (id) => request(`/sessions/${id}/open`, { method: "POST" }),
   closeSession: (id) => request(`/sessions/${id}/close`, { method: "POST" }),
   deleteSession: (id) => request(`/sessions/${id}`, { method: "DELETE" }),
+  updateSession: (id, payload) => request(`/sessions/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   updateSessionFee: (id, payload) => request(`/sessions/${id}/fee`, { method: "PATCH", body: JSON.stringify(payload) }),
   listCourts: () => request("/courts"),
   createCourt: (payload) => request("/courts", { method: "POST", body: JSON.stringify(payload) }),

@@ -7,7 +7,7 @@
         <div v-if="!session && !error" class="subtitle">No active session.</div>
         <div v-for="b in balances" :key="b.playerId" class="card">
           <div class="kpi">
-            <strong>{{ b.player.nickname || b.player.fullName }}</strong>
+            <strong class="fee-player-name">{{ b.player.nickname || b.player.fullName }}</strong>
             <button
               class="pill-button"
               :class="b.remaining > 0 ? 'warn' : 'paid'"
@@ -61,8 +61,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { api } from "../api.js";
+import { selectedSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const balances = ref([]);
 const session = ref(null);
@@ -75,13 +76,19 @@ const totalDue = computed(() =>
 
 async function load() {
   try {
-    const activeSession = await api.activeSession();
-    if (!activeSession) {
+    let currentSession = null;
+    if (selectedSessionId.value) {
+      currentSession = await api.session(selectedSessionId.value);
+    } else {
+      currentSession = await api.activeSession();
+      if (currentSession?.id) setSelectedSessionId(currentSession.id);
+    }
+    if (!currentSession) {
       session.value = null;
       balances.value = [];
       return;
     }
-    session.value = activeSession;
+    session.value = currentSession;
     const data = await api.balances(session.value.id);
     balances.value = data.balances || [];
   } catch (err) {
@@ -125,4 +132,6 @@ async function record(method) {
 }
 
 onMounted(load);
+
+watch(selectedSessionId, load);
 </script>
