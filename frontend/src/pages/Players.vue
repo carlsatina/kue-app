@@ -1,6 +1,6 @@
 <template>
-  <div class="stack">
-    <div class="segmented">
+  <div class="page-grid" :class="{ 'with-sidebar': activeTab === 'players' }">
+    <div class="segmented page-full">
       <button class="segment" :class="{ active: activeTab === 'players' }" type="button" @click="activeTab = 'players'">
         Players
       </button>
@@ -13,93 +13,92 @@
       </button>
     </div>
 
-    <div v-if="activeTab === 'players'" class="card stack live-surface" :class="{ 'over-limit': joinLimitExceeded }">
-      <div class="section-title">Player Name &amp; Skill Level</div>
-      <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!session" />
-      <div class="chip-row">
-        <button
-          v-for="level in skillLevels"
-          :key="level"
-          class="chip"
-          :class="{ active: skillLevel === level }"
-          type="button"
-          :disabled="!session"
-          @click="skillLevel = level"
-        >
-          {{ level }}
-        </button>
-      </div>
-      <button class="button" @click="addPlayer" :disabled="!session">Add Player</button>
-      <div v-if="addError" class="notice">{{ addError }}</div>
-    </div>
+    <template v-if="activeTab === 'players'">
+      <div class="page-main stack">
+        <div class="card stack live-surface">
+          <div v-if="!session" class="subtitle">No active session. Open a session to view and queue players.</div>
+          <template v-else>
+            <div class="stack">
+              <div class="subtitle">Search Players</div>
+              <input class="input" v-model="search" placeholder="Search players" />
+              <div class="subtitle">{{ filteredPlayers.length }} Players Available</div>
+            </div>
 
-    <div v-if="activeTab === 'players'" class="card stack live-surface">
-      <div v-if="!session" class="subtitle">No active session. Open a session to view and queue players.</div>
-      <template v-else>
-        <div class="stack">
-          <div class="subtitle">Search Players</div>
-          <input class="input" v-model="search" placeholder="Search players" />
-          <div class="subtitle">{{ filteredPlayers.length }} Players Available</div>
-        </div>
+            <div class="game-type">
+              <div class="subtitle">Game type</div>
+              <div class="subtitle compact">{{ sessionGameTypeLabel }}</div>
+            </div>
 
-        <div class="game-type">
-          <div class="subtitle">Game type</div>
-          <label class="radio-row">
-            <input type="radio" value="doubles" v-model="gameType" />
-            Doubles
-          </label>
-          <label class="radio-row">
-            <input type="radio" value="singles" v-model="gameType" />
-            Singles
-          </label>
-        </div>
-
-        <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
-        <div class="player-grid">
-          <div
-            v-for="player in filteredPlayers"
-            :key="player.id"
-            class="player-card"
-            :class="{
-              selected: selectedIds.includes(player.id),
-              disabled: isPlaying(player),
-              'new-player': isNewPlayer(player),
-              'over-limit': isOverJoinLimit(player.id)
-            }"
-            @click="toggleSelect(player)"
-          >
-            <div class="player-card-top">
-            <div class="player-name">
-              <div class="player-name-row">
-                <strong class="player-name-text">{{ player.nickname || player.fullName }}</strong>
-                <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
-                  <svg viewBox="0 0 24 24" role="img">
-                    <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
-                  </svg>
-                </button>
+            <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
+            <div class="player-grid">
+              <div
+                v-for="player in filteredPlayers"
+                :key="player.id"
+                class="player-card"
+                :class="{
+                  selected: selectedIds.includes(player.id),
+                  disabled: isPlaying(player),
+                  'new-player': isNewPlayer(player),
+                  'over-limit': isOverJoinLimit(player.id)
+                }"
+                @click="toggleSelect(player)"
+              >
+                <div class="player-card-top">
+                  <div class="player-name">
+                    <div class="player-name-row">
+                      <strong class="player-name-text">{{ player.nickname || player.fullName }}</strong>
+                      <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
+                        <svg viewBox="0 0 24 24" role="img">
+                          <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
+                </div>
+                <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
+                <div class="subtitle join-order-line">Join order: {{ joinOrderLabel(player.id) }}</div>
               </div>
             </div>
-            <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
+
+            <div class="inline-actions">
+              <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
+              <button class="button secondary button-compact" :disabled="selectedIds.length === 0" @click="markPresent">Mark Present</button>
+              <button class="button ghost danger button-compact" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
+                Remove
+              </button>
+            </div>
+            <div v-if="queueError" class="notice">{{ queueError }}</div>
+            <div v-if="removeError" class="notice">{{ removeError }}</div>
+            <div v-if="presentError" class="notice">{{ presentError }}</div>
+          </template>
+        </div>
+      </div>
+
+      <div class="page-side stack">
+        <div class="card stack live-surface" :class="{ 'over-limit': joinLimitExceeded }">
+          <div class="section-title">Player Name &amp; Skill Level</div>
+          <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!session" />
+          <div class="chip-row">
+            <button
+              v-for="level in skillLevels"
+              :key="level"
+              class="chip"
+              :class="{ active: skillLevel === level }"
+              type="button"
+              :disabled="!session"
+              @click="skillLevel = level"
+            >
+              {{ level }}
+            </button>
           </div>
-          <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
-          <div class="subtitle join-order-line">Join order: {{ joinOrderLabel(player.id) }}</div>
+          <button class="button" @click="addPlayer" :disabled="!session">Add Player</button>
+          <div v-if="addError" class="notice">{{ addError }}</div>
         </div>
-        </div>
+      </div>
+    </template>
 
-        <div class="inline-actions">
-          <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
-          <button class="button secondary button-compact" :disabled="selectedIds.length === 0" @click="markPresent">Mark Present</button>
-          <button class="button ghost danger button-compact" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
-            Remove
-          </button>
-        </div>
-        <div v-if="queueError" class="notice">{{ queueError }}</div>
-        <div v-if="removeError" class="notice">{{ removeError }}</div>
-        <div v-if="presentError" class="notice">{{ presentError }}</div>
-      </template>
-    </div>
-
-    <div v-if="activeTab === 'queue'" class="card stack live-surface">
+    <div v-if="activeTab === 'queue'" class="card stack live-surface page-full">
       <div class="queue-header">
         <div>
           <div class="section-title">Queue</div>
@@ -113,10 +112,12 @@
 
       <div class="share-card">
         <div class="share-text">Share your queue with players so they can view upcoming matches.</div>
-        <div v-if="queueShareLink" class="share-link">
-          <input class="input" readonly :value="queueShareLink" />
-          <button class="button ghost button-compact" @click="copyQueueShareLink">Copy</button>
-        </div>
+      <div v-if="queueShareLink" class="share-link">
+        <input class="input" readonly :value="queueShareLink" />
+        <button class="button ghost button-compact" :class="{ active: queueCopied }" @click="copyQueueShareLink">
+          {{ queueCopied ? "Copied" : "Copy" }}
+        </button>
+      </div>
       </div>
 
       <div v-if="queueMatches.length === 0" class="subtitle">Queue is empty.</div>
@@ -147,7 +148,7 @@
       </div>
     </div>
 
-    <div v-if="activeTab === 'history'" class="card stack">
+    <div v-if="activeTab === 'history'" class="card stack page-full">
       <div class="section-title">Match History</div>
       <input class="input" v-model="historySearch" placeholder="Search by player name..." />
       <div v-if="filteredHistory.length === 0" class="subtitle">No matches yet.</div>
@@ -238,6 +239,64 @@
         </div>
       </div>
     </div>
+    <div v-if="showPairingModal" class="modal-backdrop">
+      <div class="modal-card pairing-modal">
+        <div class="section-title">Pair teams</div>
+        <div class="subtitle">Drag players or tap two slots to swap.</div>
+        <div class="pairing-grid">
+          <div class="pairing-team">
+            <div class="subtitle">Team A</div>
+            <div
+              v-for="slotIndex in [0, 1]"
+              :key="`a-${slotIndex}`"
+              class="pairing-slot"
+              :class="{ selected: pairingSelectedIndex === slotIndex }"
+              @click="selectPairSlot(slotIndex)"
+              @dragover.prevent
+              @drop="onPairDrop(slotIndex)"
+            >
+              <div
+                v-if="pairingOrder[slotIndex]"
+                class="pairing-pill"
+                :class="{ dragging: draggingPairIndex === slotIndex }"
+                draggable="true"
+                @dragstart="onPairDragStart(slotIndex)"
+              >
+                {{ playerNameById(pairingOrder[slotIndex]) }}
+              </div>
+              <div v-else class="subtitle compact">Drop player</div>
+            </div>
+          </div>
+          <div class="pairing-team">
+            <div class="subtitle">Team B</div>
+            <div
+              v-for="slotIndex in [2, 3]"
+              :key="`b-${slotIndex}`"
+              class="pairing-slot"
+              :class="{ selected: pairingSelectedIndex === slotIndex }"
+              @click="selectPairSlot(slotIndex)"
+              @dragover.prevent
+              @drop="onPairDrop(slotIndex)"
+            >
+              <div
+                v-if="pairingOrder[slotIndex]"
+                class="pairing-pill"
+                :class="{ dragging: draggingPairIndex === slotIndex }"
+                draggable="true"
+                @dragstart="onPairDragStart(slotIndex)"
+              >
+                {{ playerNameById(pairingOrder[slotIndex]) }}
+              </div>
+              <div v-else class="subtitle compact">Drop player</div>
+            </div>
+          </div>
+        </div>
+        <div class="pairing-actions">
+          <button class="button ghost" @click="closePairingModal">Cancel</button>
+          <button class="button" @click="confirmPairingAdd">Add to Queue</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -255,12 +314,13 @@ const fullName = ref("");
 const skillLevel = ref("Beginner");
 const addError = ref("");
 const search = ref("");
-const gameType = ref("doubles");
 const selectedIds = ref([]);
 const queueError = ref("");
 const removeError = ref("");
 const presentError = ref("");
 const queueShareLink = ref("");
+const queueCopied = ref(false);
+let queueCopyTimer = null;
 const historySearch = ref("");
 const showEditPlayer = ref(false);
 const editPlayerId = ref("");
@@ -269,20 +329,36 @@ const editSkillLevel = ref("Beginner");
 const editError = ref("");
 const showDuplicateWarning = ref(false);
 const duplicateWarningNames = ref([]);
+const pendingQueueOrder = ref(null);
 const showRemoveConfirm = ref(false);
 const removeConfirmNames = ref([]);
 const showCancelConfirm = ref(false);
 const cancelMatchTarget = ref(null);
 const nowTick = ref(Date.now());
 let timerId = null;
+const showPairingModal = ref(false);
+const pairingOrder = ref([]);
+const draggingPairIndex = ref(null);
+const lastPairingSignature = ref("");
+const pairingSelectedIndex = ref(null);
 
 const skillLevels = ["Beginner", "Intermediate", "Upper Intermediate"];
 
-const selectionLimit = computed(() => 4);
+const sessionGameType = computed(() => session.value?.gameType || "doubles");
+const sessionGameTypeLabel = computed(() =>
+  sessionGameType.value === "singles" ? "Singles" : "Doubles"
+);
+const selectionLimit = computed(() => (sessionGameType.value === "singles" ? 2 : 4));
 
 const sessionPlayerMap = computed(() => {
   const map = new Map();
   sessionPlayers.value.forEach((sp) => map.set(sp.playerId, sp));
+  return map;
+});
+
+const playerMap = computed(() => {
+  const map = new Map();
+  players.value.forEach((player) => map.set(player.id, player));
   return map;
 });
 
@@ -580,11 +656,11 @@ async function addToQueue() {
   }
 
   try {
-    if (hasDuplicateSelection()) {
-      openDuplicateWarning();
+    if (sessionGameType.value === "doubles" && selectedIds.value.length === 4) {
+      openPairingModal();
       return;
     }
-    await enqueueSelectedPlayers();
+    await attemptQueue(selectedIds.value);
   } catch (err) {
     queueError.value = err.message || "Unable to add to queue";
   }
@@ -650,6 +726,11 @@ async function createQueueShareLink() {
 async function copyQueueShareLink() {
   if (!queueShareLink.value) return;
   await navigator.clipboard.writeText(queueShareLink.value);
+  queueCopied.value = true;
+  if (queueCopyTimer) window.clearTimeout(queueCopyTimer);
+  queueCopyTimer = window.setTimeout(() => {
+    queueCopied.value = false;
+  }, 1500);
 }
 
 function matchTeams(match) {
@@ -744,12 +825,13 @@ function closeEditPlayer() {
   editError.value = "";
 }
 
-function hasDuplicateSelection() {
-  return selectedIds.value.some((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId));
+function hasDuplicateSelection(order = selectedIds.value) {
+  return order.some((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId));
 }
 
-function openDuplicateWarning() {
-  duplicateWarningNames.value = selectedIds.value
+function openDuplicateWarning(order = selectedIds.value) {
+  pendingQueueOrder.value = order.slice();
+  duplicateWarningNames.value = order
     .filter((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId))
     .map((id) => players.value.find((p) => p.id === id))
     .filter(Boolean)
@@ -760,28 +842,30 @@ function openDuplicateWarning() {
 function closeDuplicateWarning() {
   showDuplicateWarning.value = false;
   duplicateWarningNames.value = [];
+  pendingQueueOrder.value = null;
 }
 
 async function confirmDuplicateWarning() {
   showDuplicateWarning.value = false;
   try {
-    await enqueueSelectedPlayers();
+    await enqueueSelectedPlayers(pendingQueueOrder.value || selectedIds.value);
   } catch (err) {
     queueError.value = err.message || "Unable to add to queue";
   } finally {
     duplicateWarningNames.value = [];
+    pendingQueueOrder.value = null;
   }
 }
 
-async function enqueueSelectedPlayers() {
-  await ensureCheckedIn(selectedIds.value);
-  if (gameType.value === "doubles") {
-    const teamA = selectedIds.value.slice(0, 2);
-    const teamB = selectedIds.value.slice(2, 4);
+async function enqueueSelectedPlayers(order = selectedIds.value) {
+  await ensureCheckedIn(order);
+  if (sessionGameType.value === "doubles") {
+    const teamA = order.slice(0, 2);
+    const teamB = order.slice(2, 4);
     await api.enqueue(session.value.id, { type: "doubles", playerIds: teamA });
     await api.enqueue(session.value.id, { type: "doubles", playerIds: teamB });
   } else {
-    for (const playerId of selectedIds.value) {
+    for (const playerId of order) {
       await api.enqueue(session.value.id, { type: "singles", playerIds: [playerId] });
     }
   }
@@ -818,6 +902,100 @@ function closeRemoveConfirm() {
   removeConfirmNames.value = [];
 }
 
+function openPairingModal() {
+  pairingOrder.value = selectedIds.value.slice();
+  draggingPairIndex.value = null;
+  pairingSelectedIndex.value = null;
+  showPairingModal.value = true;
+}
+
+function closePairingModal() {
+  showPairingModal.value = false;
+  pairingOrder.value = [];
+  draggingPairIndex.value = null;
+  pairingSelectedIndex.value = null;
+}
+
+async function confirmPairingAdd() {
+  if (!session.value || pairingOrder.value.length !== 4) return;
+  showPairingModal.value = false;
+  try {
+    await attemptQueue(pairingOrder.value);
+  } catch (err) {
+    queueError.value = err.message || "Unable to add to queue";
+  } finally {
+    pairingOrder.value = [];
+    draggingPairIndex.value = null;
+    pairingSelectedIndex.value = null;
+  }
+}
+
+function onPairDragStart(index) {
+  draggingPairIndex.value = index;
+}
+
+function onPairDrop(targetIndex) {
+  if (draggingPairIndex.value == null) return;
+  if (draggingPairIndex.value === targetIndex) {
+    draggingPairIndex.value = null;
+    return;
+  }
+  const next = pairingOrder.value.slice();
+  const temp = next[targetIndex];
+  next[targetIndex] = next[draggingPairIndex.value];
+  next[draggingPairIndex.value] = temp;
+  pairingOrder.value = next;
+  draggingPairIndex.value = null;
+}
+
+function playerNameById(id) {
+  const player = playerMap.value.get(id);
+  return player ? player.nickname || player.fullName : "Unknown";
+}
+
+function selectPairSlot(index) {
+  if (!pairingOrder.value[index]) return;
+  if (pairingSelectedIndex.value == null) {
+    pairingSelectedIndex.value = index;
+    return;
+  }
+  if (pairingSelectedIndex.value === index) {
+    pairingSelectedIndex.value = null;
+    return;
+  }
+  const next = pairingOrder.value.slice();
+  const temp = next[index];
+  next[index] = next[pairingSelectedIndex.value];
+  next[pairingSelectedIndex.value] = temp;
+  pairingOrder.value = next;
+  pairingSelectedIndex.value = null;
+}
+
+async function attemptQueue(order) {
+  if (hasDuplicateSelection(order)) {
+    openDuplicateWarning(order);
+    return;
+  }
+  await enqueueSelectedPlayers(order);
+}
+
+watch(
+  () => selectedIds.value.join("|"),
+  (signature) => {
+    if (sessionGameType.value !== "doubles") return;
+    if (selectedIds.value.length !== 4) return;
+    if (showPairingModal.value) return;
+    if (signature && signature !== lastPairingSignature.value) {
+      lastPairingSignature.value = signature;
+      openPairingModal();
+    }
+  }
+);
+
+watch(showPairingModal, (isOpen) => {
+  document.body.style.overflow = isOpen ? "hidden" : "";
+});
+
 async function confirmRemoveSelected() {
   showRemoveConfirm.value = false;
   removeError.value = "";
@@ -838,7 +1016,7 @@ async function confirmRemoveSelected() {
   }
 }
 
-watch(gameType, () => {
+watch(sessionGameType, () => {
   selectedIds.value = [];
 });
 
@@ -851,5 +1029,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timerId) clearInterval(timerId);
+  document.body.style.overflow = "";
 });
 </script>

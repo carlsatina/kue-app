@@ -9,6 +9,7 @@ import PublicPlayer from "./pages/PublicPlayer.vue";
 import PublicBoard from "./pages/PublicBoard.vue";
 import PublicQueue from "./pages/PublicQueue.vue";
 import JoinSession from "./pages/JoinSession.vue";
+import Tournament from "./pages/Tournament.vue";
 
 const routes = [
   { path: "/login", component: Login, meta: { public: true } },
@@ -20,6 +21,7 @@ const routes = [
   { path: "/", component: Dashboard },
   { path: "/players", component: Players },
   { path: "/rankings", component: Rankings },
+  { path: "/tournament", component: Tournament },
   { path: "/fees", component: Fees }
 ];
 

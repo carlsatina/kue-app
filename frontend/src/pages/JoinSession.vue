@@ -9,8 +9,7 @@
       <div class="subtitle">{{ session?.status }}</div>
 
       <input class="input" v-model="fullName" placeholder="Full name" />
-      <input class="input" v-model="nickname" placeholder="Nickname (optional)" />
-      <input class="input" v-model="contact" placeholder="Contact (optional)" />
+      
       <label class="radio-row">
         <input type="checkbox" v-model="newPlayer" />
         New Player
@@ -68,8 +67,6 @@ const loading = ref(true);
 const error = ref("");
 const success = ref(false);
 const fullName = ref("");
-const nickname = ref("");
-const contact = ref("");
 const newPlayer = ref(false);
 const showPlayers = ref(false);
 const joinedPlayers = ref([]);
@@ -124,14 +121,10 @@ async function submit() {
   try {
     await api.publicSessionRegister(route.params.token, {
       fullName: fullName.value.trim(),
-      nickname: nickname.value.trim() || undefined,
-      contact: contact.value.trim() || undefined,
       newPlayer: newPlayer.value
     });
     success.value = true;
     fullName.value = "";
-    nickname.value = "";
-    contact.value = "";
     newPlayer.value = false;
   } catch (err) {
     error.value = err.message || "Unable to register";

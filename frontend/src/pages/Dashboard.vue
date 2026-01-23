@@ -1,103 +1,113 @@
 <template>
-  <div class="stack">
-    <div class="card stack session-compact" :class="{ 'session-create': !session }">
-      <div class="kpi">
-        <div>
-          <div class="subtitle">Active Session</div>
-          <strong>{{ session?.name || "None" }}</strong>
-        </div>
-        <span class="badge" :class="session?.status === 'open' ? '' : 'neutral'">
-          {{ session?.status || 'closed' }}
-        </span>
-      </div>
-      <div v-if="!session" class="stack">
-        <div class="field">
-          <label class="field-label">Session name</label>
-          <input class="input" v-model="newSessionName" />
-        </div>
-        <div class="field">
-          <label class="field-label">Fee amount</label>
-          <input class="input" v-model.number="feeAmount" type="number" min="0" />
-        </div>
-        <div class="join-limits-row">
-          <div class="field field-inline">
-            <label class="field-label">Regular</label>
-            <input class="input" type="number" min="0" v-model.number="regularJoinLimit" />
+  <div class="page-grid with-sidebar">
+    <div class="page-main stack">
+      <div class="card stack session-compact" :class="{ 'session-create': !session }">
+        <div class="kpi">
+          <div>
+            <div class="subtitle">Active Session</div>
+            <strong>{{ session?.name || "None" }}</strong>
           </div>
-          <div class="field field-inline">
-            <label class="field-label">New joiner</label>
-            <input class="input" type="number" min="0" v-model.number="newJoinerLimit" />
+          <span class="badge" :class="session?.status === 'open' ? '' : 'neutral'">
+            {{ session?.status || 'closed' }}
+          </span>
+        </div>
+        <div v-if="!session" class="stack">
+          <div class="field">
+            <label class="field-label">Session name</label>
+            <input class="input" v-model="newSessionName" />
+          </div>
+          <div class="field">
+            <label class="field-label">Game type</label>
+            <select class="input" v-model="newGameType">
+              <option value="doubles">Doubles</option>
+              <option value="singles">Singles</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">Fee amount</label>
+            <input class="input" v-model.number="feeAmount" type="number" min="0" />
+          </div>
+          <div class="join-limits-row">
+            <div class="field field-inline">
+              <label class="field-label">Regular</label>
+              <input class="input" type="number" min="0" v-model.number="regularJoinLimit" />
+            </div>
+            <div class="field field-inline">
+              <label class="field-label">New joiner</label>
+              <input class="input" type="number" min="0" v-model.number="newJoinerLimit" />
+            </div>
+          </div>
+          <button class="button" @click="createSession">Create Session</button>
+        </div>
+        <div v-else class="stack">
+          <div class="session-actions">
+            <button class="button button-compact" @click="refresh">Refresh</button>
+            <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
+            <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
+            <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
           </div>
         </div>
-        <button class="button" @click="createSession">Create Session</button>
       </div>
-      <div v-else class="stack">
-        <div class="session-actions">
-          <button class="button button-compact" @click="refresh">Refresh</button>
-          <button v-if="session.status !== 'open'" class="button secondary button-compact" @click="openSession">Open</button>
-          <button v-else class="button ghost button-compact" @click="closeSession">Close Session</button>
-          <button v-if="session.status === 'open'" class="button ghost button-compact" @click="openEditFee">Edit Fee</button>
+
+      <div class="card live-surface">
+        <div class="kpi" style="margin-bottom: 8px;">
+          <div class="section-title">Courts</div>
+          <div class="inline-actions">
+            <button class="button ghost button-compact" @click="createInviteLink">Create Join Link</button>
+            <button class="button ghost" @click="showAddCourt = true">Add Court</button>
+          </div>
         </div>
+        <div class="grid two">
+          <div v-for="court in courts" :key="court.id" class="card court-card">
+            <div class="kpi">
+              <div class="court-title">
+                <strong class="court-name">{{ court.court?.name || court.name }}</strong>
+                <button class="icon-button" @click="openEditCourt(court)" aria-label="Edit court">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
+                  </svg>
+                </button>
+                <button class="icon-button danger" @click="deleteCourt(court)" aria-label="Delete court">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z"></path>
+                  </svg>
+                </button>
+              </div>
+              <span class="badge" :class="court.status === 'maintenance' ? 'warning' : ''">
+                {{ courtStatusLabel(court.status) }}
+              </span>
+            </div>
+            <div v-if="court.status === 'available'" class="inline-actions">
+              <button class="button ghost button-compact" @click="goToPlayers">Add Player</button>
+            </div>
+            <template v-else>
+              <div class="subtitle">Now Playing:</div>
+              <div v-if="court.currentMatch" class="pill-row">
+                <span class="pill team-a">{{ teamNames(court.currentMatch, 1) }}</span>
+                <span class="pill team-b">{{ teamNames(court.currentMatch, 2) }}</span>
+              </div>
+              <div v-else class="subtitle">Open</div>
+              <div v-if="court.currentMatch" class="time-row">
+                <span class="subtitle">Started: {{ formatTime(court.currentMatch.startedAt) }}</span>
+                <span class="subtitle">Elapsed: {{ elapsedTime(court.currentMatch.startedAt) }}</span>
+              </div>
+              <div class="inline-actions">
+                <button class="button ghost button-compact danger" @click="cancelMatch(court)" :disabled="!court.currentMatchId">
+                  Cancel Match
+                </button>
+                <button class="button button-compact" @click="openEndMatch(court)" :disabled="!court.currentMatchId">
+                  Complete Match
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div v-if="error" class="notice" style="margin-top:12px;">{{ error }}</div>
       </div>
     </div>
 
-    <div class="card live-surface">
-      <div class="kpi" style="margin-bottom: 8px;">
-        <div class="section-title">Courts</div>
-        <div class="inline-actions">
-          <button class="button ghost button-compact" @click="createInviteLink">Create Join Link</button>
-          <button class="button ghost" @click="showAddCourt = true">Add Court</button>
-        </div>
-      </div>
-      <div class="grid two">
-        <div v-for="court in courts" :key="court.id" class="card court-card">
-          <div class="kpi">
-            <div class="court-title">
-              <strong class="court-name">{{ court.court?.name || court.name }}</strong>
-              <button class="icon-button" @click="openEditCourt(court)" aria-label="Edit court">
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
-                </svg>
-              </button>
-              <button class="icon-button danger" @click="deleteCourt(court)" aria-label="Delete court">
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z"></path>
-                </svg>
-              </button>
-            </div>
-            <span class="badge" :class="court.status === 'maintenance' ? 'warning' : ''">
-              {{ courtStatusLabel(court.status) }}
-            </span>
-          </div>
-          <div v-if="court.status === 'available'" class="inline-actions">
-            <button class="button ghost button-compact" @click="goToPlayers">Add Player</button>
-          </div>
-          <template v-else>
-            <div class="subtitle">Now Playing:</div>
-            <div v-if="court.currentMatch" class="pill-row">
-              <span class="pill team-a">{{ teamNames(court.currentMatch, 1) }}</span>
-              <span class="pill team-b">{{ teamNames(court.currentMatch, 2) }}</span>
-            </div>
-            <div v-else class="subtitle">Open</div>
-            <div v-if="court.currentMatch" class="time-row">
-              <span class="subtitle">Started: {{ formatTime(court.currentMatch.startedAt) }}</span>
-              <span class="subtitle">Elapsed: {{ elapsedTime(court.currentMatch.startedAt) }}</span>
-            </div>
-            <div class="inline-actions">
-              <button class="button ghost button-compact danger" @click="cancelMatch(court)" :disabled="!court.currentMatchId">
-                Cancel Match
-              </button>
-              <button class="button button-compact" @click="openEndMatch(court)" :disabled="!court.currentMatchId">
-                Complete Match
-              </button>
-            </div>
-          </template>
-        </div>
-      </div>
-      <div v-if="error" class="notice" style="margin-top:12px;">{{ error }}</div>
-    </div>
-
-    <div class="card">
+    <div class="page-side stack">
+      <div class="card">
       <button class="collapse-head" @click="togglePastSessions" type="button">
         <span class="section-title">Past Sessions</span>
         <span class="collapse-meta">
@@ -107,17 +117,21 @@
       </button>
       <div v-if="showPastSessions" class="collapse-body">
         <div v-if="pastSessions.length === 0" class="subtitle">No closed sessions yet.</div>
-        <div v-for="s in pastSessions" :key="s.id" class="card">
-          <div class="kpi">
-            <strong class="session-name">{{ s.name }}</strong>
+        <div v-for="s in pastSessions" :key="s.id" class="past-session-item">
+          <div class="past-session-row">
+            <div>
+              <div class="past-session-name">{{ s.name }}</div>
+              <div class="subtitle">Closed: {{ formatDateTime(s.closedAt) }}</div>
+            </div>
             <span class="badge neutral">{{ s.status }}</span>
           </div>
-          <div class="subtitle">Closed: {{ formatDateTime(s.closedAt) }}</div>
-          <div class="inline-actions">
+          <div class="past-session-actions">
             <button class="button ghost button-compact" @click="viewRoster(s)">View Roster</button>
             <button class="button button-compact" @click="reopenSession(s)">Reopen</button>
+            <button class="button ghost danger button-compact" @click="openDeleteSession(s)">Delete</button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -181,6 +195,28 @@
           <button class="button button-compact secondary" @click="setWinner(2)">Team B Wins</button>
         </div>
       </div>
+      <div class="grid two score-inputs">
+        <div class="field">
+          <label class="field-label">Team A score (optional)</label>
+          <input
+            class="input"
+            type="number"
+            min="0"
+            v-model="endMatchScoreA"
+            placeholder="Score"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label">Team B score (optional)</label>
+          <input
+            class="input"
+            type="number"
+            min="0"
+            v-model="endMatchScoreB"
+            placeholder="Score"
+          />
+        </div>
+      </div>
       <div class="grid two">
         <button class="button ghost" @click="setWinner(null)">Draw</button>
         <button class="button ghost" @click="closeEndMatch">Cancel</button>
@@ -208,9 +244,18 @@
       <div class="subtitle">Share this link so players can register.</div>
       <div class="share-link">
         <input class="input" readonly :value="inviteLink" />
-        <button class="button ghost button-compact" @click="copyInviteLink">Copy</button>
+        <button class="button ghost button-compact" :class="{ active: inviteCopied }" @click="copyInviteLink">
+          {{ inviteCopied ? "Copied" : "Copy" }}
+        </button>
       </div>
       <button class="button ghost" @click="closeInviteLink">Close</button>
+    </div>
+  </div>
+  <div v-if="showInviteWarning" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Session needed</h3>
+      <div class="subtitle">Create and open a session before generating a join link.</div>
+      <button class="button" @click="closeInviteWarning">OK</button>
     </div>
   </div>
   <div v-if="showRoster" class="modal-backdrop">
@@ -241,6 +286,19 @@
       </div>
     </div>
   </div>
+  <div v-if="showDeleteSession" class="modal-backdrop">
+    <div class="modal-card">
+      <h3>Delete Session</h3>
+      <div class="subtitle">
+        Permanently delete <strong>{{ deleteSessionTarget?.name }}</strong> and its data?
+      </div>
+      <div v-if="deleteSessionError" class="notice">{{ deleteSessionError }}</div>
+      <div class="grid two">
+        <button class="button ghost" @click="closeDeleteSession">Cancel</button>
+        <button class="button danger button-compact" @click="confirmDeleteSession">Delete</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -252,6 +310,7 @@ const session = ref(null);
 const courts = ref([]);
 const error = ref("");
 const newSessionName = ref("Evening Open Play");
+const newGameType = ref("doubles");
 const feeAmount = ref(100);
 const showAddCourt = ref(false);
 const newCourtName = ref("");
@@ -273,6 +332,8 @@ const showEndMatch = ref(false);
 const endMatchCourt = ref(null);
 const endMatchError = ref("");
 const endMatchTeams = ref({ teamA: "—", teamB: "—" });
+const endMatchScoreA = ref("");
+const endMatchScoreB = ref("");
 const showInviteLink = ref(false);
 const inviteLink = ref("");
 const pastSessions = ref([]);
@@ -287,6 +348,12 @@ const editFeeAmount = ref(0);
 const editFeeError = ref("");
 const regularJoinLimit = ref(0);
 const newJoinerLimit = ref(0);
+const showInviteWarning = ref(false);
+const inviteCopied = ref(false);
+let inviteCopyTimer = null;
+const showDeleteSession = ref(false);
+const deleteSessionTarget = ref(null);
+const deleteSessionError = ref("");
 
 async function refresh() {
   try {
@@ -316,8 +383,11 @@ async function refresh() {
       );
     }
 
-    session.value = { ...sessionData, courtSessions };
-    courts.value = courtSessions;
+    const sortedCourts = [...courtSessions].sort((a, b) =>
+      courtSortName(a).localeCompare(courtSortName(b), undefined, { numeric: true, sensitivity: "base" })
+    );
+    session.value = { ...sessionData, courtSessions: sortedCourts };
+    courts.value = sortedCourts;
     pastSessions.value = await api.listSessions("closed");
   } catch {
     session.value = null;
@@ -330,6 +400,30 @@ async function refresh() {
 
 function togglePastSessions() {
   showPastSessions.value = !showPastSessions.value;
+}
+
+function openDeleteSession(target) {
+  deleteSessionTarget.value = target;
+  deleteSessionError.value = "";
+  showDeleteSession.value = true;
+}
+
+function closeDeleteSession() {
+  showDeleteSession.value = false;
+  deleteSessionTarget.value = null;
+  deleteSessionError.value = "";
+}
+
+async function confirmDeleteSession() {
+  if (!deleteSessionTarget.value) return;
+  deleteSessionError.value = "";
+  try {
+    await api.deleteSession(deleteSessionTarget.value.id);
+    closeDeleteSession();
+    await refresh();
+  } catch (err) {
+    deleteSessionError.value = err.message || "Unable to delete session";
+  }
 }
 
 function openEditFee() {
@@ -360,14 +454,20 @@ async function saveEditFee() {
 }
 
 async function createSession() {
-  const created = await api.createSession({
-    name: newSessionName.value,
-    feeMode: "flat",
-    feeAmount: Number(feeAmount.value),
-    regularJoinLimit: Math.max(0, Number(regularJoinLimit.value) || 0),
-    newJoinerLimit: Math.max(0, Number(newJoinerLimit.value) || 0)
-  });
-  session.value = created;
+  try {
+    const created = await api.createSession({
+      name: newSessionName.value,
+      gameType: newGameType.value,
+      feeMode: "flat",
+      feeAmount: Number(feeAmount.value),
+      regularJoinLimit: Math.max(0, Number(regularJoinLimit.value) || 0),
+      newJoinerLimit: Math.max(0, Number(newJoinerLimit.value) || 0)
+    });
+    await api.openSession(created.id);
+    await refresh();
+  } catch (err) {
+    error.value = err.message || "Unable to create session";
+  }
 }
 
 async function openSession() {
@@ -393,6 +493,8 @@ function openEndMatch(courtSession) {
   const teamA = teamNames(courtSession.currentMatch, 1) || "—";
   const teamB = teamNames(courtSession.currentMatch, 2) || "—";
   endMatchTeams.value = { teamA, teamB };
+  endMatchScoreA.value = "";
+  endMatchScoreB.value = "";
   showEndMatch.value = true;
 }
 
@@ -401,6 +503,14 @@ async function setWinner(winnerTeam) {
   try {
     const payload = { matchId: endMatchCourt.value.currentMatchId };
     if (winnerTeam) payload.winnerTeam = winnerTeam;
+    const scoreA = parseScoreValue(endMatchScoreA.value);
+    const scoreB = parseScoreValue(endMatchScoreB.value);
+    if (scoreA != null || scoreB != null) {
+      const score = {};
+      if (scoreA != null) score.team1 = scoreA;
+      if (scoreB != null) score.team2 = scoreB;
+      payload.score = score;
+    }
     await api.endMatch(session.value.id, payload);
     closeEndMatch();
     await refresh();
@@ -455,6 +565,10 @@ function courtStatusLabel(status) {
   return status || "—";
 }
 
+function courtSortName(courtSession) {
+  return (courtSession?.court?.name || courtSession?.name || "").trim();
+}
+
 function formatDateTime(timestamp) {
   if (!timestamp) return "—";
   const dt = new Date(timestamp);
@@ -484,7 +598,10 @@ function closeAddCourt() {
 }
 
 async function createInviteLink() {
-  if (!session.value) return;
+  if (!session.value) {
+    showInviteWarning.value = true;
+    return;
+  }
   const link = await api.createSessionInviteLink(session.value.id);
   inviteLink.value = `${window.location.origin}/join/${link.token}`;
   showInviteLink.value = true;
@@ -493,11 +610,21 @@ async function createInviteLink() {
 async function copyInviteLink() {
   if (!inviteLink.value) return;
   await navigator.clipboard.writeText(inviteLink.value);
+  inviteCopied.value = true;
+  if (inviteCopyTimer) window.clearTimeout(inviteCopyTimer);
+  inviteCopyTimer = window.setTimeout(() => {
+    inviteCopied.value = false;
+  }, 1500);
 }
 
 function closeInviteLink() {
   showInviteLink.value = false;
   inviteLink.value = "";
+  inviteCopied.value = false;
+}
+
+function closeInviteWarning() {
+  showInviteWarning.value = false;
 }
 
 async function viewRoster(sessionItem) {
@@ -546,6 +673,14 @@ function closeEndMatch() {
   endMatchCourt.value = null;
   endMatchError.value = "";
   endMatchTeams.value = { teamA: "—", teamB: "—" };
+  endMatchScoreA.value = "";
+  endMatchScoreB.value = "";
+}
+
+function parseScoreValue(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
 }
 
 function goToPlayers() {

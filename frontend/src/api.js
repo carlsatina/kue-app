@@ -27,9 +27,24 @@ export const api = {
   listSessions: (status) => request(`/sessions${status ? `?status=${status}` : ""}`),
   sessionPlayers: (sessionId) => request(`/sessions/${sessionId}/players`),
   rankings: (sessionId) => request(`/sessions/${sessionId}/rankings`),
+  bracketOverrides: (sessionId, params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/sessions/${sessionId}/bracket-overrides${query ? `?${query}` : ""}`);
+  },
+  saveBracketOverride: (sessionId, payload) =>
+    request(`/sessions/${sessionId}/bracket-overrides`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  deleteBracketOverride: (sessionId, payload) =>
+    request(`/sessions/${sessionId}/bracket-overrides`, {
+      method: "DELETE",
+      body: JSON.stringify(payload)
+    }),
   createSession: (payload) => request("/sessions", { method: "POST", body: JSON.stringify(payload) }),
   openSession: (id) => request(`/sessions/${id}/open`, { method: "POST" }),
   closeSession: (id) => request(`/sessions/${id}/close`, { method: "POST" }),
+  deleteSession: (id) => request(`/sessions/${id}`, { method: "DELETE" }),
   updateSessionFee: (id, payload) => request(`/sessions/${id}/fee`, { method: "PATCH", body: JSON.stringify(payload) }),
   listCourts: () => request("/courts"),
   createCourt: (payload) => request("/courts", { method: "POST", body: JSON.stringify(payload) }),

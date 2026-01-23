@@ -9,6 +9,7 @@ const createSchema = z.object({
   name: z.string().min(1),
   startsAt: z.string().datetime().optional(),
   endsAt: z.string().datetime().optional(),
+  gameType: z.enum(["singles", "doubles"]).default("doubles"),
   feeMode: z.enum(["flat", "per_game"]).default("flat"),
   feeAmount: z.number().nonnegative().default(0),
   regularJoinLimit: z.number().int().nonnegative().default(0),
@@ -20,6 +21,19 @@ const createSchema = z.object({
 const feeSchema = z.object({
   feeMode: z.enum(["flat", "per_game"]).optional(),
   feeAmount: z.number().nonnegative().optional()
+});
+
+const bracketOverrideSchema = z.object({
+  matchId: z.string().min(1),
+  bracketType: z.enum(["single", "double", "round_robin"]),
+  matchFormat: z.enum(["singles", "doubles"]),
+  winnerId: z.string().optional().nullable(),
+  score: z.any().optional()
+});
+
+const bracketOverrideQuerySchema = z.object({
+  bracketType: z.enum(["single", "double", "round_robin"]).optional(),
+  matchFormat: z.enum(["singles", "doubles"]).optional()
 });
 
 router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
@@ -35,6 +49,7 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       endsAt: data.endsAt ? new Date(data.endsAt) : null,
       feeMode: data.feeMode,
       feeAmount: data.feeAmount,
+      gameType: data.gameType,
       regularJoinLimit: data.regularJoinLimit,
       newJoinerLimit: data.newJoinerLimit,
       returnToQueue: data.returnToQueue,
@@ -83,6 +98,20 @@ router.post("/:id/close", requireAuth, requireRole(["admin"]), async (req, res) 
     data: { status: "closed", closedAt: new Date() }
   });
   res.json(session);
+});
+
+router.delete("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  const { id } = req.params;
+  const session = await prisma.session.findUnique({ where: { id } });
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  if (session.status === "open") {
+    return res.status(409).json({ error: "Close the session before deleting it" });
+  }
+
+  await prisma.session.delete({ where: { id } });
+  res.json({ deleted: true });
 });
 
 router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
@@ -232,6 +261,73 @@ router.get("/:id/rankings", requireAuth, requireRole(["admin", "staff"]), async 
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
   res.json({ sessionId: id, totalPlayers: ranked.length, players: ranked });
+});
+
+router.get("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { id } = req.params;
+  const parse = bracketOverrideQuerySchema.safeParse(req.query);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid query", details: parse.error.flatten() });
+  }
+  const where = {
+    sessionId: id,
+    ...(parse.data.bracketType ? { bracketType: parse.data.bracketType } : {}),
+    ...(parse.data.matchFormat ? { matchFormat: parse.data.matchFormat } : {})
+  };
+  const overrides = await prisma.bracketOverride.findMany({
+    where,
+    orderBy: { createdAt: "asc" }
+  });
+  res.json(overrides);
+});
+
+router.post("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { id } = req.params;
+  const parse = bracketOverrideSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  const { matchId, bracketType, matchFormat, winnerId, score } = parse.data;
+  const override = await prisma.bracketOverride.upsert({
+    where: {
+      sessionId_matchId_bracketType_matchFormat: {
+        sessionId: id,
+        matchId,
+        bracketType,
+        matchFormat
+      }
+    },
+    update: {
+      winnerId: winnerId ?? null,
+      scoreJson: score ?? null
+    },
+    create: {
+      sessionId: id,
+      matchId,
+      bracketType,
+      matchFormat,
+      winnerId: winnerId ?? null,
+      scoreJson: score ?? null
+    }
+  });
+  res.json(override);
+});
+
+router.delete("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { id } = req.params;
+  const parse = bracketOverrideSchema.pick({
+    matchId: true,
+    bracketType: true,
+    matchFormat: true
+  }).safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  const { matchId, bracketType, matchFormat } = parse.data;
+  const result = await prisma.bracketOverride.deleteMany({
+    where: { sessionId: id, matchId, bracketType, matchFormat }
+  });
+  res.json({ deleted: result.count });
 });
 
 export default router;
