@@ -51,7 +51,7 @@
                 :key="player.id"
                 class="player-card"
                 :class="{
-                  selected: selectedIds.includes(player.id),
+                  selected: sessionIsOpen && selectedIds.includes(player.id),
                   disabled: isPlaying(player),
                   'new-player': isNewPlayer(player),
                   'over-limit': isOverJoinLimit(player.id)
@@ -102,7 +102,7 @@
       <div class="page-side stack">
         <div class="card stack live-surface" :class="{ 'over-limit': joinLimitExceeded }">
           <div class="section-title">Player Name &amp; Skill Level</div>
-          <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!session" />
+          <input class="input" v-model="fullName" placeholder="Enter player name" :disabled="!sessionIsOpen" />
           <div class="chip-row">
             <button
               v-for="level in skillLevels"
@@ -110,13 +110,13 @@
               class="chip"
               :class="{ active: skillLevel === level }"
               type="button"
-              :disabled="!session"
+              :disabled="!sessionIsOpen"
               @click="skillLevel = level"
             >
               {{ level }}
             </button>
           </div>
-          <button class="button" @click="addPlayer" :disabled="!session">Add Player</button>
+          <button class="button" @click="addPlayer" :disabled="!sessionIsOpen">Add Player</button>
           <div v-if="addError" class="notice">{{ addError }}</div>
         </div>
       </div>
@@ -506,7 +506,7 @@ const filteredPlayers = computed(() => {
   });
 });
 
-const canAdd = computed(() => selectedIds.value.length === selectionLimit.value && session.value);
+const canAdd = computed(() => selectedIds.value.length === selectionLimit.value && session.value && sessionIsOpen.value);
 
 const queueMatchCount = computed(() => queueMatches.value.length);
 
@@ -517,8 +517,10 @@ function isReadyForPresent(sp) {
   return false;
 }
 
-const showMarkPresent = computed(() =>
-  selectedIds.value.some((playerId) => isReadyForPresent(sessionPlayerMap.value.get(playerId)))
+const showMarkPresent = computed(
+  () =>
+    sessionIsOpen.value &&
+    selectedIds.value.some((playerId) => isReadyForPresent(sessionPlayerMap.value.get(playerId)))
 );
 const duplicateWarningText = computed(() => {
   if (!duplicateWarningNames.value.length) {
@@ -619,6 +621,7 @@ function statusLabel(player) {
   if (sp.status === "done") return "Done";
   if (sp.status === "present") return "Present";
   if (sp.status === "checked_in" || sp.status === "ready") {
+    if (!sessionIsOpen.value) return "Ready";
     if (sp.lastPlayedAt) {
       const elapsed = idleElapsed(sp);
       return `Idle ${elapsed}`;
@@ -653,6 +656,7 @@ function idleElapsed(sp) {
 }
 
 function toggleSelect(player) {
+  if (!sessionIsOpen.value) return;
   if (isPlaying(player)) return;
   if (selectedIds.value.includes(player.id)) {
     selectedIds.value = selectedIds.value.filter((id) => id !== player.id);
@@ -1224,6 +1228,22 @@ watch([showPairingModal, showSinglesQueueModal], ([pairingOpen, singlesOpen]) =>
   }
 });
 
+watch(sessionIsOpen, (isOpen) => {
+  if (!isOpen) {
+    selectedIds.value = [];
+    if (timerId) {
+      clearInterval(timerId);
+      timerId = null;
+    }
+    return;
+  }
+  if (!timerId) {
+    timerId = setInterval(() => {
+      nowTick.value = Date.now();
+    }, 1000);
+  }
+});
+
 async function confirmRemoveSelected() {
   showRemoveConfirm.value = false;
   removeError.value = "";
@@ -1257,9 +1277,11 @@ watch(selectedSessionId, () => {
 
 onMounted(() => {
   load();
-  timerId = setInterval(() => {
-    nowTick.value = Date.now();
-  }, 1000);
+  if (sessionIsOpen.value) {
+    timerId = setInterval(() => {
+      nowTick.value = Date.now();
+    }, 1000);
+  }
   document.addEventListener("click", handleDisplayMenuOutsideClick);
 });
 
