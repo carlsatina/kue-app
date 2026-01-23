@@ -8,7 +8,6 @@
             <div class="rank-badge" :class="rankClass(player.rank)">{{ player.rank }}</div>
             <div>
               <strong>{{ player.player.nickname || player.player.fullName }}</strong>
-              <div class="subtitle">{{ player.player.fullName }}</div>
             </div>
           </div>
           <div class="rank-stats">

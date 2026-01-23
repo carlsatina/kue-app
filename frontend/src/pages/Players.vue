@@ -20,7 +20,22 @@
           <template v-else>
             <div class="stack">
               <div class="subtitle">Search Players</div>
-              <input class="input" v-model="search" placeholder="Search players" />
+              <div class="players-toolbar">
+                <input class="input" v-model="search" placeholder="Search players" />
+                <div class="menu" ref="displayMenuRef">
+                  <button class="menu-button" type="button" @click="showDisplayMenu = !showDisplayMenu">
+                    <svg viewBox="0 0 24 24" role="img">
+                      <path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2z"></path>
+                    </svg>
+                  </button>
+                  <div v-if="showDisplayMenu" class="menu-panel">
+                    <label class="radio-row">
+                      <input type="checkbox" v-model="showJoinOrder" />
+                      Show join order
+                    </label>
+                  </div>
+                </div>
+              </div>
               <div class="subtitle">{{ filteredPlayers.length }} Players Available</div>
             </div>
 
@@ -57,13 +72,22 @@
                   <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
                 </div>
                 <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
-                <div class="subtitle join-order-line">Join order: {{ joinOrderLabel(player.id) }}</div>
+                <div v-if="showJoinOrder" class="subtitle join-order-line">
+                  Join order: {{ joinOrderLabel(player.id) }}
+                </div>
               </div>
             </div>
 
             <div class="inline-actions">
               <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
-              <button class="button secondary button-compact" :disabled="selectedIds.length === 0" @click="markPresent">Mark Present</button>
+              <button
+                v-if="showMarkPresent"
+                class="button secondary button-compact"
+                :disabled="selectedIds.length === 0"
+                @click="markPresent"
+              >
+                Mark Present
+              </button>
               <button class="button ghost danger button-compact" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
                 Remove
               </button>
@@ -250,17 +274,18 @@
               v-for="slotIndex in [0, 1]"
               :key="`a-${slotIndex}`"
               class="pairing-slot"
-              :class="{ selected: pairingSelectedIndex === slotIndex }"
+              :data-index="slotIndex"
+              :class="{
+                selected: pairingSelectedIndex === slotIndex,
+                hover: pairingHoverIndex === slotIndex
+              }"
               @click="selectPairSlot(slotIndex)"
-              @dragover.prevent
-              @drop="onPairDrop(slotIndex)"
             >
               <div
                 v-if="pairingOrder[slotIndex]"
                 class="pairing-pill"
                 :class="{ dragging: draggingPairIndex === slotIndex }"
-                draggable="true"
-                @dragstart="onPairDragStart(slotIndex)"
+                @pointerdown.prevent="onPairPointerDown(slotIndex, $event)"
               >
                 {{ playerNameById(pairingOrder[slotIndex]) }}
               </div>
@@ -273,17 +298,18 @@
               v-for="slotIndex in [2, 3]"
               :key="`b-${slotIndex}`"
               class="pairing-slot"
-              :class="{ selected: pairingSelectedIndex === slotIndex }"
+              :data-index="slotIndex"
+              :class="{
+                selected: pairingSelectedIndex === slotIndex,
+                hover: pairingHoverIndex === slotIndex
+              }"
               @click="selectPairSlot(slotIndex)"
-              @dragover.prevent
-              @drop="onPairDrop(slotIndex)"
             >
               <div
                 v-if="pairingOrder[slotIndex]"
                 class="pairing-pill"
                 :class="{ dragging: draggingPairIndex === slotIndex }"
-                draggable="true"
-                @dragstart="onPairDragStart(slotIndex)"
+                @pointerdown.prevent="onPairPointerDown(slotIndex, $event)"
               >
                 {{ playerNameById(pairingOrder[slotIndex]) }}
               </div>
@@ -322,6 +348,9 @@ const queueShareLink = ref("");
 const queueCopied = ref(false);
 let queueCopyTimer = null;
 const historySearch = ref("");
+const showDisplayMenu = ref(false);
+const showJoinOrder = ref(true);
+const displayMenuRef = ref(null);
 const showEditPlayer = ref(false);
 const editPlayerId = ref("");
 const editPlayerName = ref("");
@@ -339,8 +368,11 @@ let timerId = null;
 const showPairingModal = ref(false);
 const pairingOrder = ref([]);
 const draggingPairIndex = ref(null);
+const pairingHoverIndex = ref(null);
 const lastPairingSignature = ref("");
 const pairingSelectedIndex = ref(null);
+let pairingDragState = null;
+let pairingDragEndedAt = 0;
 
 const skillLevels = ["Beginner", "Intermediate", "Upper Intermediate"];
 
@@ -449,6 +481,10 @@ const filteredPlayers = computed(() => {
 const canAdd = computed(() => selectedIds.value.length === selectionLimit.value && session.value);
 
 const queueMatchCount = computed(() => queueMatches.value.length);
+
+const showMarkPresent = computed(() =>
+  selectedIds.value.some((playerId) => sessionPlayerMap.value.get(playerId)?.status === "checked_in")
+);
 const duplicateWarningText = computed(() => {
   if (!duplicateWarningNames.value.length) {
     return "Selected players are already queued or playing. Add to queue again?";
@@ -905,6 +941,7 @@ function closeRemoveConfirm() {
 function openPairingModal() {
   pairingOrder.value = selectedIds.value.slice();
   draggingPairIndex.value = null;
+  pairingHoverIndex.value = null;
   pairingSelectedIndex.value = null;
   showPairingModal.value = true;
 }
@@ -913,6 +950,7 @@ function closePairingModal() {
   showPairingModal.value = false;
   pairingOrder.value = [];
   draggingPairIndex.value = null;
+  pairingHoverIndex.value = null;
   pairingSelectedIndex.value = null;
 }
 
@@ -926,26 +964,115 @@ async function confirmPairingAdd() {
   } finally {
     pairingOrder.value = [];
     draggingPairIndex.value = null;
+    pairingHoverIndex.value = null;
     pairingSelectedIndex.value = null;
   }
 }
 
-function onPairDragStart(index) {
+function onPairPointerDown(index, event) {
+  if (!pairingOrder.value[index]) return;
+  event.preventDefault();
+  const target = event.currentTarget;
+  const rect = target.getBoundingClientRect();
+  const ghost = target.cloneNode(true);
+  ghost.classList.add("pairing-ghost");
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  document.body.appendChild(ghost);
+
+  pairingDragState = {
+    originIndex: index,
+    pointerId: event.pointerId,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    startX: event.clientX,
+    startY: event.clientY,
+    moved: false,
+    ghost,
+    element: target
+  };
   draggingPairIndex.value = index;
+  pairingHoverIndex.value = index;
+
+  try {
+    target.setPointerCapture(event.pointerId);
+  } catch {
+    // ignore capture errors
+  }
+
+  updatePairGhostPosition(event.clientX, event.clientY);
+  window.addEventListener("pointermove", onPairPointerMove);
+  window.addEventListener("pointerup", onPairPointerUp);
+  window.addEventListener("pointercancel", onPairPointerUp);
 }
 
-function onPairDrop(targetIndex) {
-  if (draggingPairIndex.value == null) return;
-  if (draggingPairIndex.value === targetIndex) {
-    draggingPairIndex.value = null;
-    return;
+function onPairPointerMove(event) {
+  if (!pairingDragState || event.pointerId !== pairingDragState.pointerId) return;
+  updatePairGhostPosition(event.clientX, event.clientY);
+  if (!pairingDragState.moved) {
+    const dx = Math.abs(event.clientX - pairingDragState.startX);
+    const dy = Math.abs(event.clientY - pairingDragState.startY);
+    if (dx > 4 || dy > 4) pairingDragState.moved = true;
   }
+  const index = findPairSlotIndex(event.clientX, event.clientY);
+  pairingHoverIndex.value = index;
+}
+
+function onPairPointerUp(event) {
+  if (!pairingDragState || event.pointerId !== pairingDragState.pointerId) return;
+  const originIndex = pairingDragState.originIndex;
+  const dropIndex = pairingHoverIndex.value;
+  cleanupPairDrag(event);
+  if (dropIndex == null || dropIndex === originIndex) return;
   const next = pairingOrder.value.slice();
-  const temp = next[targetIndex];
-  next[targetIndex] = next[draggingPairIndex.value];
-  next[draggingPairIndex.value] = temp;
+  const temp = next[dropIndex];
+  next[dropIndex] = next[originIndex];
+  next[originIndex] = temp;
   pairingOrder.value = next;
+}
+
+function handleDisplayMenuOutsideClick(event) {
+  if (!showDisplayMenu.value) return;
+  const menuEl = displayMenuRef.value;
+  if (!menuEl || menuEl.contains(event.target)) return;
+  showDisplayMenu.value = false;
+}
+
+function updatePairGhostPosition(x, y) {
+  if (!pairingDragState?.ghost) return;
+  pairingDragState.ghost.style.transform = `translate(${x - pairingDragState.offsetX}px, ${
+    y - pairingDragState.offsetY
+  }px)`;
+}
+
+function findPairSlotIndex(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const slot = el?.closest?.(".pairing-slot");
+  if (!slot) return null;
+  const idx = Number(slot.dataset.index);
+  return Number.isFinite(idx) ? idx : null;
+}
+
+function cleanupPairDrag(event) {
+  window.removeEventListener("pointermove", onPairPointerMove);
+  window.removeEventListener("pointerup", onPairPointerUp);
+  window.removeEventListener("pointercancel", onPairPointerUp);
+  if (pairingDragState?.element && pairingDragState.pointerId != null) {
+    try {
+      pairingDragState.element.releasePointerCapture(pairingDragState.pointerId);
+    } catch {
+      // ignore release errors
+    }
+  }
+  if (pairingDragState?.ghost) {
+    pairingDragState.ghost.remove();
+  }
+  if (pairingDragState?.moved) {
+    pairingDragEndedAt = Date.now();
+  }
+  pairingDragState = null;
   draggingPairIndex.value = null;
+  pairingHoverIndex.value = null;
 }
 
 function playerNameById(id) {
@@ -955,6 +1082,8 @@ function playerNameById(id) {
 
 function selectPairSlot(index) {
   if (!pairingOrder.value[index]) return;
+  if (draggingPairIndex.value != null) return;
+  if (Date.now() - pairingDragEndedAt < 250) return;
   if (pairingSelectedIndex.value == null) {
     pairingSelectedIndex.value = index;
     return;
@@ -994,6 +1123,9 @@ watch(
 
 watch(showPairingModal, (isOpen) => {
   document.body.style.overflow = isOpen ? "hidden" : "";
+  if (!isOpen) {
+    cleanupPairDrag();
+  }
 });
 
 async function confirmRemoveSelected() {
@@ -1025,10 +1157,13 @@ onMounted(() => {
   timerId = setInterval(() => {
     nowTick.value = Date.now();
   }, 1000);
+  document.addEventListener("click", handleDisplayMenuOutsideClick);
 });
 
 onUnmounted(() => {
   if (timerId) clearInterval(timerId);
   document.body.style.overflow = "";
+  cleanupPairDrag();
+  document.removeEventListener("click", handleDisplayMenuOutsideClick);
 });
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <div class="page-grid with-sidebar">
+  <div class="page-grid with-sidebar bracket-page">
     <div class="page-main stack">
       <div v-if="session" class="card stack live-surface">
         <div class="subtitle compact">
@@ -110,75 +110,14 @@
             <div class="subtitle">{{ matchFormatLabel }}</div>
           </div>
         </div>
-        <div v-if="session && matchFormat === 'doubles'" class="team-builder stack">
-          <div class="team-builder-head">
-            <div>
-              <div class="subtitle">Team Builder</div>
-              <div class="subtitle compact">Select 2 players to create a team.</div>
-            </div>
-            <div class="team-builder-actions">
-              <button class="button ghost button-compact" @click="autoPairTeams">Auto Pair</button>
-              <button class="button ghost button-compact" @click="clearTeams">Reset</button>
-            </div>
+        <div v-if="session && matchFormat === 'doubles'" class="team-builder-summary">
+          <div>
+            <div class="subtitle">Team Builder</div>
+            <strong>{{ manualTeams.length }} manual teams</strong>
           </div>
-          <div class="team-builder-grid">
-            <div class="team-builder-panel">
-              <div class="subtitle compact">Players</div>
-              <div class="team-builder-list">
-                <button
-                  v-for="player in joinedPlayers"
-                  :key="player.id"
-                  class="team-player"
-                  :class="{
-                    selected: selectedTeamPlayers.includes(player.id),
-                    assigned: assignedPlayerIds.has(player.id)
-                  }"
-                  :disabled="assignedPlayerIds.has(player.id)"
-                  @click="togglePlayerSelection(player.id)"
-                >
-                  {{ player.name }}
-                </button>
-              </div>
-            </div>
-            <div class="team-builder-panel">
-              <div class="subtitle compact">Teams</div>
-              <div class="team-builder-list">
-                <div v-if="teamPreview.length === 0" class="subtitle compact">
-                  No teams yet.
-                </div>
-                <div v-for="(team, idx) in teamPreview" :key="team.id" class="team-card">
-                  <div class="team-name">
-                    {{ team.name }}
-                    <span v-if="team.source === 'auto'" class="team-pill">Auto</span>
-                  </div>
-                  <button
-                    v-if="team.source === 'manual'"
-                    class="icon-button danger"
-                    @click="removeTeam(idx)"
-                    aria-label="Remove team"
-                  >
-                    <svg viewBox="0 0 24 24" role="img">
-                      <path
-                        d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zm3-3h6l1 2H8l1-2z"
-                      ></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="team-builder-actions">
-            <button
-              class="button button-compact"
-              @click="createManualTeam"
-              :disabled="selectedTeamPlayers.length !== 2"
-            >
-              Create Team
-            </button>
-            <div class="subtitle compact">
-              Selected {{ selectedTeamPlayers.length }}/2
-            </div>
-          </div>
+          <router-link class="button ghost button-compact" to="/team-builder">
+            Open Team Builder
+          </router-link>
         </div>
         <div v-if="session" class="tournament-actions">
           <button class="button ghost button-compact" @click="load">Refresh</button>
@@ -253,6 +192,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { TournamentBracket } from "vue3-tournament";
 import "vue3-tournament/style.css";
 import { api } from "../api.js";
+import { loadManualTeams, saveManualTeams } from "../utils/teamBuilder.js";
 
 const session = ref(null);
 const sessionPlayers = ref([]);
@@ -264,7 +204,6 @@ const matchFormatLabel = computed(() =>
 );
 const bracketType = ref("single");
 const manualTeams = ref([]);
-const selectedTeamPlayers = ref([]);
 let refreshTimer = null;
 const manualOverrides = ref({});
 const overrideError = ref("");
@@ -305,18 +244,11 @@ const entrants = computed(() => {
   return joinedPlayers.value;
 });
 
-const teamPreview = computed(() => (matchFormat.value === "doubles" ? entrants.value : []));
-
 const entrantKeys = computed(() => {
   const keys = entrants.value
     .map((entrant) => (typeof entrant === "string" ? entrant : entrant?.id))
     .filter(Boolean);
   return new Set(keys);
-});
-
-const assignedPlayerIds = computed(() => {
-  const ids = manualTeams.value.flatMap((team) => team.memberIds || []);
-  return new Set(ids);
 });
 
 const matchResults = computed(() => buildMatchResults(matches.value));
@@ -357,10 +289,12 @@ async function load() {
       sessionPlayers.value = [];
       matches.value = [];
       manualOverrides.value = {};
+      manualTeams.value = [];
       return;
     }
     sessionPlayers.value = await api.sessionPlayers(activeSession.id);
     matches.value = await api.matchHistory(activeSession.id);
+    manualTeams.value = loadManualTeams(activeSession.id);
     await loadOverrides();
   } catch (err) {
     error.value = err.message || "Unable to load session";
@@ -368,6 +302,7 @@ async function load() {
     sessionPlayers.value = [];
     matches.value = [];
     manualOverrides.value = {};
+    manualTeams.value = [];
   }
 }
 
@@ -508,10 +443,6 @@ function createTeam(team, fallbackId) {
     name: team.name,
     disabled: team.disabled || false
   };
-}
-
-function buildDoublesTeams(players) {
-  return buildTeamEntrants(players, []);
 }
 
 function buildTeamEntrants(players, customTeams) {
@@ -926,58 +857,21 @@ function parseScoreValue(value) {
   return Number.isFinite(numberValue) ? numberValue : null;
 }
 
-function togglePlayerSelection(playerId) {
-  if (assignedPlayerIds.value.has(playerId)) return;
-  if (selectedTeamPlayers.value.includes(playerId)) {
-    selectedTeamPlayers.value = selectedTeamPlayers.value.filter((id) => id !== playerId);
-    return;
-  }
-  if (selectedTeamPlayers.value.length >= 2) return;
-  selectedTeamPlayers.value = [...selectedTeamPlayers.value, playerId];
-}
-
-function createManualTeam() {
-  if (selectedTeamPlayers.value.length !== 2) return;
-  const selected = selectedTeamPlayers.value
-    .map((id) => joinedPlayers.value.find((player) => player.id === id))
-    .filter(Boolean);
-  if (selected.length !== 2) return;
-  const memberIds = selected.map((player) => player.id);
-  const name = `${selected[0].name} + ${selected[1].name}`;
-  manualTeams.value = [
-    ...manualTeams.value,
-    buildTeam(memberIds, name, { source: "manual" })
-  ];
-  selectedTeamPlayers.value = [];
-}
-
-function removeTeam(index) {
-  const manualOnly = manualTeams.value;
-  const teamToRemove = teamPreview.value[index];
-  if (!teamToRemove || teamToRemove.source !== "manual") return;
-  manualTeams.value = manualOnly.filter((team) => team.id !== teamToRemove.id);
-}
-
-function clearTeams() {
-  manualTeams.value = [];
-  selectedTeamPlayers.value = [];
-}
-
-function autoPairTeams() {
-  manualTeams.value = buildDoublesTeams(joinedPlayers.value).map((team) => ({
-    ...team,
-    source: "manual"
-  }));
-  selectedTeamPlayers.value = [];
-}
-
 watch(joinedPlayers, (players) => {
   const valid = new Set(players.map((player) => player.id));
   manualTeams.value = manualTeams.value.filter((team) =>
     (team.memberIds || []).every((id) => valid.has(id))
   );
-  selectedTeamPlayers.value = selectedTeamPlayers.value.filter((id) => valid.has(id));
 });
+
+watch(
+  () => manualTeams.value,
+  (teams) => {
+    if (!session.value?.id) return;
+    saveManualTeams(session.value.id, teams);
+  },
+  { deep: true }
+);
 
 watch([bracketType, matchFormat], () => {
   if (session.value) {
@@ -985,7 +879,6 @@ watch([bracketType, matchFormat], () => {
   }
   if (matchFormat.value !== "doubles") {
     manualTeams.value = [];
-    selectedTeamPlayers.value = [];
   }
 });
 

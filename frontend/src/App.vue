@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'bracket-shell': route.path === '/tournament' || route.path === '/team-builder' }">
     <header class="header">
       <div class="brand">
         <h1 class="title">Kue</h1>

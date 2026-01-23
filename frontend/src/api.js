@@ -76,6 +76,7 @@ export const api = {
   publicPlayer: (token) => fetch(`${API_URL}/public/player/${token}`).then((r) => r.json()),
   publicQueue: (token) => fetch(`${API_URL}/public/queue/${token}`).then((r) => r.json()),
   publicQueueRankings: (token) => fetch(`${API_URL}/public/queue/${token}/rankings`).then((r) => r.json()),
+  publicQueueBracket: (token) => fetch(`${API_URL}/public/queue/${token}/bracket`).then((r) => r.json()),
   publicSessionInvite: (token) => fetch(`${API_URL}/public/session-invite/${token}`).then((r) => r.json()),
   publicSessionInvitePlayers: (token) => fetch(`${API_URL}/public/session-invite/${token}/players`).then((r) => r.json()),
   publicSessionRegister: (token, payload) =>

@@ -139,6 +139,46 @@ router.get("/queue/:token/rankings", async (req, res) => {
   });
 });
 
+router.get("/queue/:token/bracket", async (req, res) => {
+  const { token } = req.params;
+  const link = await prisma.sessionShareLink.findUnique({
+    where: { token },
+    include: { session: true }
+  });
+
+  if (!link || link.revokedAt) {
+    return res.status(404).json({ error: "Link not found" });
+  }
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+    return res.status(410).json({ error: "Link expired" });
+  }
+
+  const session = link.session;
+
+  const sessionPlayers = await prisma.sessionPlayer.findMany({
+    where: { sessionId: session.id },
+    include: { player: true },
+    orderBy: { checkedInAt: "asc" }
+  });
+
+  const matches = await prisma.match.findMany({
+    where: { sessionId: session.id },
+    include: { participants: { include: { player: true } } }
+  });
+
+  const overrides = await prisma.bracketOverride.findMany({
+    where: { sessionId: session.id },
+    orderBy: { createdAt: "asc" }
+  });
+
+  res.json({
+    session: { id: session.id, name: session.name, gameType: session.gameType },
+    players: sessionPlayers,
+    matches,
+    overrides
+  });
+});
+
 router.get("/queue/:token", async (req, res) => {
   const { token } = req.params;
   const link = await prisma.sessionShareLink.findUnique({
@@ -180,7 +220,7 @@ router.get("/queue/:token", async (req, res) => {
   });
 
   res.json({
-    session: { id: session.id, name: session.name },
+    session: { id: session.id, name: session.name, gameType: session.gameType },
     courts,
     queue: queueEntries
   });
