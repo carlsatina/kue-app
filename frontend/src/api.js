@@ -66,6 +66,8 @@ export const api = {
   suggestMatch: (sessionId, payload) => request(`/matches/${sessionId}/suggest`, { method: "POST", body: JSON.stringify(payload) }),
   startMatch: (sessionId, payload) => request(`/matches/${sessionId}/start`, { method: "POST", body: JSON.stringify(payload) }),
   endMatch: (sessionId, payload) => request(`/matches/${sessionId}/end`, { method: "POST", body: JSON.stringify(payload) }),
+  updateMatchResult: (sessionId, payload) =>
+    request(`/matches/${sessionId}/result`, { method: "PATCH", body: JSON.stringify(payload) }),
   cancelMatch: (sessionId, payload) => request(`/matches/${sessionId}/cancel`, { method: "POST", body: JSON.stringify(payload) }),
   getMatch: (id) => request(`/matches/${id}`),
   matchHistory: (sessionId) => request(`/matches/${sessionId}/history`),

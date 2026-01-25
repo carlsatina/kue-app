@@ -190,7 +190,7 @@
     </div>
   </div>
   <div v-if="showEndMatch" class="modal-backdrop">
-    <div class="modal-card match-modal">
+    <div class="modal-card match-modal compact">
       <div class="match-modal-head">
         <div>
           <div class="subtitle">Finish the game</div>
@@ -202,41 +202,41 @@
       <div v-if="endMatchError" class="notice">{{ endMatchError }}</div>
       <div class="winner-grid">
         <div class="winner-card team-a">
-          <div class="subtitle">Team A</div>
-          <strong>{{ endMatchTeams.teamA }}</strong>
+          <div class="winner-row">
+            <div class="winner-info">
+              <div class="subtitle">Team A</div>
+              <strong>{{ endMatchTeams.teamA }}</strong>
+            </div>
+            <input
+              class="input winner-score-input"
+              type="number"
+              min="0"
+              v-model="endMatchScoreA"
+              placeholder="Score"
+            />
+          </div>
           <button class="button button-compact" @click="setWinner(1)">Team A Wins</button>
         </div>
         <div class="winner-card team-b">
-          <div class="subtitle">Team B</div>
-          <strong>{{ endMatchTeams.teamB }}</strong>
+          <div class="winner-row">
+            <div class="winner-info">
+              <div class="subtitle">Team B</div>
+              <strong>{{ endMatchTeams.teamB }}</strong>
+            </div>
+            <input
+              class="input winner-score-input"
+              type="number"
+              min="0"
+              v-model="endMatchScoreB"
+              placeholder="Score"
+            />
+          </div>
           <button class="button button-compact secondary" @click="setWinner(2)">Team B Wins</button>
         </div>
       </div>
-      <div class="grid two score-inputs">
-        <div class="field">
-          <label class="field-label">Team A score (optional)</label>
-          <input
-            class="input"
-            type="number"
-            min="0"
-            v-model="endMatchScoreA"
-            placeholder="Score"
-          />
-        </div>
-        <div class="field">
-          <label class="field-label">Team B score (optional)</label>
-          <input
-            class="input"
-            type="number"
-            min="0"
-            v-model="endMatchScoreB"
-            placeholder="Score"
-          />
-        </div>
-      </div>
-      <div class="grid two">
-        <button class="button ghost" @click="setWinner(null)">Draw</button>
-        <button class="button ghost" @click="closeEndMatch">Cancel</button>
+      <div class="match-modal-actions">
+        <button class="button ghost button-compact draw-button" @click="setWinner(null)">Draw</button>
+        <button class="button ghost button-compact" @click="closeEndMatch">Cancel</button>
       </div>
     </div>
   </div>

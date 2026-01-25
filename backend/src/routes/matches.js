@@ -23,6 +23,12 @@ const endSchema = z.object({
   winnerTeam: z.number().int().min(1).max(2).optional()
 });
 
+const updateResultSchema = z.object({
+  matchId: z.string().uuid(),
+  score: z.any().optional(),
+  winnerTeam: z.number().int().min(1).max(2).nullable().optional()
+});
+
 const cancelSchema = z.object({
   matchId: z.string().uuid()
 });
@@ -158,6 +164,82 @@ router.post("/:sessionId/end", requireAuth, requireRole(["admin", "staff"]), asy
   // End match sets players back to idle (checked_in) without re-queueing.
 
   res.json({ matchId });
+});
+
+router.patch("/:sessionId/result", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const { sessionId } = req.params;
+  const parse = updateResultSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+
+  const winnerProvided = Object.prototype.hasOwnProperty.call(parse.data, "winnerTeam");
+  const scoreProvided = Object.prototype.hasOwnProperty.call(parse.data, "score");
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({
+        where: { id: parse.data.matchId },
+        include: { participants: true }
+      });
+
+      if (!match || match.sessionId !== sessionId) {
+        throw Object.assign(new Error("Match not found"), { statusCode: 404 });
+      }
+      if (match.status !== "ended") {
+        throw Object.assign(new Error("Match is not ended"), { statusCode: 400 });
+      }
+
+      const nextWinner = winnerProvided ? parse.data.winnerTeam ?? null : match.winnerTeam;
+
+      if (winnerProvided && match.winnerTeam !== nextWinner) {
+        const team1Ids = match.participants
+          .filter((p) => p.teamNumber === 1)
+          .map((p) => p.playerId);
+        const team2Ids = match.participants
+          .filter((p) => p.teamNumber === 2)
+          .map((p) => p.playerId);
+
+        const adjust = async (ids, field, op) => {
+          if (!ids.length) return;
+          await tx.sessionPlayer.updateMany({
+            where: { sessionId, playerId: { in: ids } },
+            data: { [field]: { [op]: 1 } }
+          });
+        };
+
+        if (match.winnerTeam === 1) {
+          await adjust(team1Ids, "wins", "decrement");
+          await adjust(team2Ids, "losses", "decrement");
+        } else if (match.winnerTeam === 2) {
+          await adjust(team2Ids, "wins", "decrement");
+          await adjust(team1Ids, "losses", "decrement");
+        }
+
+        if (nextWinner === 1) {
+          await adjust(team1Ids, "wins", "increment");
+          await adjust(team2Ids, "losses", "increment");
+        } else if (nextWinner === 2) {
+          await adjust(team2Ids, "wins", "increment");
+          await adjust(team1Ids, "losses", "increment");
+        }
+      }
+
+      const updates = {};
+      if (winnerProvided) updates.winnerTeam = nextWinner;
+      if (scoreProvided) updates.scoreJson = parse.data.score ?? null;
+
+      return tx.match.update({
+        where: { id: match.id },
+        data: updates
+      });
+    });
+
+    res.json(updated);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({ error: err.message || "Unable to update match result" });
+  }
 });
 
 router.post("/:sessionId/cancel", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {

@@ -10,6 +10,7 @@ const createSchema = z.object({
   startsAt: z.string().datetime().optional(),
   endsAt: z.string().datetime().optional(),
   gameType: z.enum(["singles", "doubles"]).default("doubles"),
+  defaultBracketType: z.enum(["single", "double", "round_robin"]).optional(),
   feeMode: z.enum(["flat", "per_game"]).default("flat"),
   feeAmount: z.number().nonnegative().default(0),
   regularJoinLimit: z.number().int().nonnegative().default(0),
@@ -26,6 +27,7 @@ const feeSchema = z.object({
 const updateSessionSchema = z.object({
   name: z.string().min(1).optional(),
   gameType: z.enum(["singles", "doubles"]).optional(),
+  defaultBracketType: z.enum(["single", "double", "round_robin"]).nullable().optional(),
   feeAmount: z.number().nonnegative().optional(),
   regularJoinLimit: z.number().int().nonnegative().optional(),
   newJoinerLimit: z.number().int().nonnegative().optional(),
@@ -59,6 +61,7 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
       feeMode: data.feeMode,
       feeAmount: data.feeAmount,
       gameType: data.gameType,
+      defaultBracketType: data.defaultBracketType ?? null,
       regularJoinLimit: data.regularJoinLimit,
       newJoinerLimit: data.newJoinerLimit,
       returnToQueue: data.returnToQueue,
@@ -239,6 +242,7 @@ router.patch("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
   const updates = {
     name: data.name,
     gameType: data.gameType,
+    defaultBracketType: data.defaultBracketType,
     feeAmount: data.feeAmount,
     regularJoinLimit: data.regularJoinLimit,
     newJoinerLimit: data.newJoinerLimit,

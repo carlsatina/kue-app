@@ -21,76 +21,158 @@
             <div class="stack">
               <div class="subtitle">Search Players</div>
               <div class="players-toolbar">
-                <input class="input" v-model="search" placeholder="Search players" />
-                <div class="menu" ref="displayMenuRef">
-                  <button class="menu-button" type="button" @click="showDisplayMenu = !showDisplayMenu">
-                    <svg viewBox="0 0 24 24" role="img">
-                      <path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2z"></path>
-                    </svg>
-                  </button>
-                  <div v-if="showDisplayMenu" class="menu-panel">
-                    <label class="radio-row">
-                      <input type="checkbox" v-model="showJoinOrder" />
-                      Show join order
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div class="subtitle">{{ filteredPlayers.length }} Players Available</div>
-            </div>
-
-            <div class="game-type">
-              <div class="subtitle">Game type</div>
-              <div class="subtitle compact">{{ sessionGameTypeLabel }}</div>
-            </div>
-
-            <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
-            <div class="player-grid">
-              <div
-                v-for="player in filteredPlayers"
-                :key="player.id"
-                class="player-card"
-                :class="{
-                  selected: sessionIsOpen && selectedIds.includes(player.id),
-                  disabled: isPlaying(player),
-                  'new-player': isNewPlayer(player),
-                  'over-limit': isOverJoinLimit(player.id)
-                }"
-                @click="toggleSelect(player)"
-              >
-                <div class="player-card-top">
-                  <div class="player-name">
-                    <div class="player-name-row">
-                      <strong class="player-name-text">{{ player.nickname || player.fullName }}</strong>
-                      <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
-                        <svg viewBox="0 0 24 24" role="img">
-                          <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
-                        </svg>
-                      </button>
+                <template v-if="selectionTab === 'players'">
+                  <input class="input" v-model="search" placeholder="Search players" />
+                  <div class="menu" ref="displayMenuRef">
+                    <button class="menu-button" type="button" @click="showDisplayMenu = !showDisplayMenu">
+                      <svg viewBox="0 0 24 24" role="img">
+                        <path d="M4 6h16v2H4V6zm0 5h10v2H4v-2zm0 5h7v2H4v-2z"></path>
+                      </svg>
+                    </button>
+                    <div v-if="showDisplayMenu" class="menu-panel">
+                      <label class="radio-row">
+                        <input type="checkbox" v-model="showJoinOrder" />
+                        Show join order
+                      </label>
                     </div>
                   </div>
-                  <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
-                </div>
-                <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
-                <div v-if="showJoinOrder" class="subtitle join-order-line">
-                  Join order: {{ joinOrderLabel(player.id) }}
-                </div>
+                </template>
+                <template v-else>
+                  <input class="input" v-model="teamSearch" placeholder="Search teams" />
+                  <button class="button ghost button-compact" @click="clearTeamSearch">Clear</button>
+                </template>
               </div>
             </div>
 
-            <div class="inline-actions">
-              <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
-              <button
-                v-if="showMarkPresent"
-                class="button secondary button-compact"
-                :disabled="selectedIds.length === 0 || !sessionIsOpen"
-                @click="markPresent"
-              >
-                Mark Present
-              </button>
-              <button class="button ghost danger button-compact" :disabled="selectedIds.length === 0" @click="openRemoveConfirm">
-                Remove
-              </button>
+            <div class="selection-header">
+              <div v-if="sessionGameType === 'doubles'" class="segmented inner-tabs">
+                <button
+                  class="segment"
+                  :class="{ active: selectionTab === 'players' }"
+                  type="button"
+                  @click="selectionTab = 'players'"
+                >
+                  Pick
+                </button>
+                <button
+                  class="segment"
+                  :class="{ active: selectionTab === 'teams' }"
+                  type="button"
+                  @click="selectionTab = 'teams'"
+                >
+                  Teams
+                </button>
+              </div>
+              <div class="game-type inline">
+                <span class="subtitle">Game type</span>
+                <span class="subtitle compact">{{ sessionGameTypeLabel }}</span>
+              </div>
+            </div>
+
+            <template v-if="selectionTab === 'players'">
+              <div class="subtitle">Pick {{ selectionLimit }} Players to Start</div>
+              <div class="player-grid">
+                <div
+                  v-for="player in filteredPlayers"
+                  :key="player.id"
+                  class="player-card"
+                  :class="{
+                    selected: sessionIsOpen && selectedIds.includes(player.id),
+                    disabled: isPlaying(player),
+                    'new-player': isNewPlayer(player),
+                    'over-limit': isOverJoinLimit(player.id)
+                  }"
+                  @click="toggleSelect(player)"
+                >
+                  <div class="player-card-top">
+                    <div class="player-name">
+                      <div class="player-name-row">
+                        <strong class="player-name-text">{{ player.nickname || player.fullName }}</strong>
+                        <button class="icon-button small" @click.stop="openEditPlayer(player)" aria-label="Edit player">
+                          <svg viewBox="0 0 24 24" role="img">
+                            <path d="M4 15.5V20h4.5L19 9.5 14.5 5 4 15.5z"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <span class="status-pill" :class="statusClass(player)">{{ statusLabel(player) }}</span>
+                  </div>
+                  <div class="subtitle games-text">Games: {{ gamesPlayed(player.id) }}</div>
+                  <div v-if="showJoinOrder" class="subtitle join-order-line">
+                    Join order: {{ joinOrderLabel(player.id) }}
+                  </div>
+                </div>
+              </div>
+              <div class="subtitle players-count">{{ filteredPlayers.length }} Players Available</div>
+
+              <div class="inline-actions">
+                <button class="button button-compact" :disabled="!canAdd" @click="addToQueue">Add to Queue</button>
+                <button
+                  v-if="showMarkPresent"
+                  class="button secondary button-compact"
+                  :disabled="selectedIds.length === 0 || !sessionIsOpen"
+                  @click="markPresent"
+                >
+                  Mark Present
+                </button>
+                <button
+                  class="button ghost danger button-compact"
+                  :disabled="selectedIds.length === 0"
+                  @click="openRemoveConfirm"
+                >
+                  Remove
+                </button>
+              </div>
+            </template>
+
+            <div v-if="sessionGameType === 'doubles' && selectionTab === 'teams'" class="team-select">
+              <div class="team-select-head">
+                <div>
+                  <div class="subtitle">Team Builder Teams</div>
+                  <div class="subtitle compact">Select 2 teams to queue a match.</div>
+                </div>
+                <router-link class="button ghost button-compact" to="/team-builder">Open Team Builder</router-link>
+              </div>
+              <div v-if="filteredTeamOptions.length === 0" class="subtitle compact">
+                No teams yet.
+              </div>
+              <div v-else class="team-select-grid">
+                <button
+                  v-for="team in filteredTeamOptions"
+                  :key="team.id"
+                  class="team-select-card"
+                  :class="{
+                    selected: selectedTeamIds.includes(team.id),
+                    disabled: isTeamDisabled(team)
+                  }"
+                  type="button"
+                  :disabled="isTeamDisabled(team)"
+                  @click="toggleTeamSelection(team)"
+                >
+                  <div class="team-select-headline">
+                    <div class="team-select-name">{{ team.displayName }}</div>
+                    <span v-if="team.status" class="team-status-pill" :class="team.status.toLowerCase()">
+                      {{ team.status }}
+                    </span>
+                  </div>
+                  <div class="team-select-members">
+                    <span v-if="team.source === 'auto'" class="team-select-pill auto">Auto</span>
+                    <span v-else class="team-select-pill manual">Manual</span>
+                  </div>
+                </button>
+              </div>
+              <div class="team-select-actions">
+                <button class="button button-compact" :disabled="!canAddTeams" @click="addSelectedTeams">
+                  Add Team{{ selectedTeamIds.length === 1 ? "" : "s" }} to Queue
+                </button>
+                <button
+                  class="button ghost button-compact"
+                  :disabled="selectedTeamIds.length === 0"
+                  @click="clearTeamSelection"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
             <div v-if="queueError" class="notice">{{ queueError }}</div>
             <div v-if="removeError" class="notice">{{ removeError }}</div>
@@ -184,15 +266,32 @@
             <span class="history-pill tie" v-if="match.winnerTeam == null && match.status === 'ended'">Tie</span>
             <span class="history-pill cancelled" v-if="match.status === 'cancelled'">Cancelled</span>
           </div>
-          <div class="history-time">{{ formatTime(match.endedAt || match.startedAt) }}</div>
+          <div class="history-right">
+            <div class="history-time">{{ formatTime(match.endedAt || match.startedAt) }}</div>
+            <button
+              v-if="match.status === 'ended'"
+              class="button ghost button-compact history-edit-button"
+              @click="openEditResult(match)"
+            >
+              Edit Result
+            </button>
+          </div>
         </div>
-        <div class="history-vs">
+        <div class="history-vs compact">
           <div class="history-team" :class="{ winner: match.winnerTeam === 1 }">
-            {{ teamNames(match, 1) }} <span v-if="match.winnerTeam === 1">🏆</span>
+            <span class="history-team-name">{{ teamNames(match, 1) }}</span>
+            <span v-if="match.winnerTeam === 1" class="history-crown">🏆</span>
+            <span v-if="matchScore(match, 1) != null" class="history-score-pill">
+              {{ matchScore(match, 1) }}
+            </span>
           </div>
           <span class="history-vs-pill">vs</span>
           <div class="history-team" :class="{ winner: match.winnerTeam === 2 }">
-            {{ teamNames(match, 2) }} <span v-if="match.winnerTeam === 2">🏆</span>
+            <span class="history-team-name">{{ teamNames(match, 2) }}</span>
+            <span v-if="match.winnerTeam === 2" class="history-crown">🏆</span>
+            <span v-if="matchScore(match, 2) != null" class="history-score-pill">
+              {{ matchScore(match, 2) }}
+            </span>
           </div>
         </div>
         <div class="history-meta">
@@ -342,12 +441,82 @@
         </div>
       </div>
     </div>
+    <div v-if="showEditResult" class="modal-backdrop">
+      <div class="modal-card match-modal compact">
+        <div class="match-modal-head">
+          <div>
+            <div class="subtitle">Edit match result</div>
+            <h3>Update Result</h3>
+          </div>
+          <span class="match-burst">🏸</span>
+        </div>
+        <div v-if="editResultError" class="notice">{{ editResultError }}</div>
+        <div class="winner-grid">
+          <div class="winner-card team-a">
+            <div class="winner-row">
+              <div class="winner-info">
+                <div class="subtitle">Team A</div>
+                <strong>{{ editResultTeams.teamA }}</strong>
+              </div>
+              <input
+                class="input winner-score-input"
+                type="number"
+                min="0"
+                v-model="editResultScoreA"
+                placeholder="Score"
+              />
+            </div>
+            <button class="button button-compact" @click="saveEditedResult(1)">Team A Wins</button>
+          </div>
+          <div class="winner-card team-b">
+            <div class="winner-row">
+              <div class="winner-info">
+                <div class="subtitle">Team B</div>
+                <strong>{{ editResultTeams.teamB }}</strong>
+              </div>
+              <input
+                class="input winner-score-input"
+                type="number"
+                min="0"
+                v-model="editResultScoreB"
+                placeholder="Score"
+              />
+            </div>
+            <button class="button button-compact secondary" @click="saveEditedResult(2)">Team B Wins</button>
+          </div>
+        </div>
+        <div class="match-modal-actions">
+          <button class="button ghost button-compact draw-button" @click="saveEditedResult(null)">Draw</button>
+          <button class="button ghost button-compact" @click="closeEditResult">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div v-if="showTeamQueueModal" class="modal-backdrop">
+      <div class="modal-card">
+        <h3>Queue teams</h3>
+        <div class="subtitle">Confirm this match pairing.</div>
+        <div class="singles-match-row">
+          <div v-if="teamQueueOrder[0]" class="singles-pill singles-pill-a">
+            {{ teamNameById(teamQueueOrder[0]) }}
+          </div>
+          <div class="singles-vs">vs</div>
+          <div v-if="teamQueueOrder[1]" class="singles-pill singles-pill-b">
+            {{ teamNameById(teamQueueOrder[1]) }}
+          </div>
+        </div>
+        <div class="grid two">
+          <button class="button" @click="confirmTeamQueueAdd">Add to Queue</button>
+          <button class="button ghost" @click="closeTeamQueueModal">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "../api.js";
+import { loadManualTeams } from "../utils/teamBuilder.js";
 import { selectedSessionId, setSelectedSessionId } from "../state/sessionStore.js";
 
 const activeTab = ref("players");
@@ -370,6 +539,7 @@ let queueCopyTimer = null;
 const historySearch = ref("");
 const showDisplayMenu = ref(false);
 const showJoinOrder = ref(true);
+const teamSearch = ref("");
 const displayMenuRef = ref(null);
 const sessionIsOpen = computed(() => session.value?.status === "open");
 const showEditPlayer = ref(false);
@@ -397,6 +567,20 @@ let pairingDragEndedAt = 0;
 const showSinglesQueueModal = ref(false);
 const singlesQueueOrder = ref([]);
 const lastSinglesSignature = ref("");
+const manualTeams = ref([]);
+const selectedTeamIds = ref([]);
+const pendingQueueTeams = ref([]);
+const pendingQueueMode = ref("players");
+const selectionTab = ref("players");
+const showTeamQueueModal = ref(false);
+const teamQueueOrder = ref([]);
+const lastTeamQueueSignature = ref("");
+const showEditResult = ref(false);
+const editResultMatchId = ref("");
+const editResultTeams = ref({ teamA: "—", teamB: "—" });
+const editResultScoreA = ref("");
+const editResultScoreB = ref("");
+const editResultError = ref("");
 
 const skillLevels = ["Beginner", "Intermediate", "Upper Intermediate"];
 
@@ -414,6 +598,10 @@ const sessionPlayerMap = computed(() => {
   const map = new Map();
   sessionPlayers.value.forEach((sp) => map.set(sp.playerId, sp));
   return map;
+});
+
+const activeSessionPlayerIds = computed(() => {
+  return new Set(sessionPlayers.value.filter((sp) => sp.status !== "done").map((sp) => sp.playerId));
 });
 
 const playerMap = computed(() => {
@@ -492,9 +680,44 @@ const queuedIds = computed(() => {
   return ids;
 });
 
+const queuedTeamKeys = computed(() => {
+  const keys = new Set();
+  queueEntries.value.forEach((entry) => {
+    const ids = entry.players.map((p) => p.playerId).filter(Boolean);
+    if (ids.length >= 2) {
+      keys.add(teamKey(ids));
+    }
+  });
+  return keys;
+});
+
+const playingTeamKeys = computed(() => {
+  const keys = new Set();
+  if (!session.value?.courtSessions) return keys;
+  session.value.courtSessions.forEach((courtSession) => {
+    const participants = courtSession.currentMatch?.participants || [];
+    if (!participants.length) return;
+    const team1Ids = participants.filter((p) => p.teamNumber === 1).map((p) => p.playerId).filter(Boolean);
+    const team2Ids = participants.filter((p) => p.teamNumber === 2).map((p) => p.playerId).filter(Boolean);
+    if (team1Ids.length) keys.add(teamKey(team1Ids));
+    if (team2Ids.length) keys.add(teamKey(team2Ids));
+  });
+  return keys;
+});
+
 const sessionPlayerList = computed(() => {
   if (!session.value) return [];
   return sessionPlayers.value.filter((sp) => sp.status !== "done").map((sp) => sp.player);
+});
+
+const joinedPlayersForTeams = computed(() => {
+  return sessionPlayers.value
+    .filter((sp) => sp.status !== "done")
+    .sort((a, b) => new Date(a.checkedInAt) - new Date(b.checkedInAt))
+    .map((sp) => ({
+      id: sp.player.id,
+      name: sp.player.nickname || sp.player.fullName
+    }));
 });
 
 const filteredPlayers = computed(() => {
@@ -507,8 +730,69 @@ const filteredPlayers = computed(() => {
 });
 
 const canAdd = computed(() => selectedIds.value.length === selectionLimit.value && session.value && sessionIsOpen.value);
+const canAddTeams = computed(
+  () =>
+    session.value &&
+    sessionIsOpen.value &&
+    sessionGameType.value === "doubles" &&
+    selectedTeamIds.value.length === 2
+);
 
 const queueMatchCount = computed(() => queueMatches.value.length);
+
+const manualAssignedIds = computed(() => {
+  return new Set(
+    manualTeams.value
+      .flatMap((team) => team.memberIds || [])
+      .filter((id) => typeof id === "string" && id.length > 0)
+  );
+});
+
+const autoTeams = computed(() => {
+  const available = joinedPlayersForTeams.value.filter((player) => !manualAssignedIds.value.has(player.id));
+  return buildAutoTeams(available);
+});
+
+const teamOptions = computed(() => {
+  if (!session.value || sessionGameType.value !== "doubles") return [];
+  const manualList = manualTeams.value.map((team) => ({
+    ...team,
+    memberIds: Array.isArray(team.memberIds) ? team.memberIds : []
+  }));
+  const manualKeys = new Set(manualList.map((team) => teamKey(team.memberIds)));
+  const mergedTeams = [
+    ...manualList,
+    ...autoTeams.value.filter((team) => !manualKeys.has(teamKey(team.memberIds || [])))
+  ];
+  return mergedTeams.map((team) => {
+    const memberIds = Array.isArray(team.memberIds) ? team.memberIds : [];
+    const memberNames = memberIds
+      .map((id) => sessionPlayerMap.value.get(id)?.player || playerMap.value.get(id))
+      .filter(Boolean)
+      .map((player) => player.nickname || player.fullName);
+    const missingMembers = memberIds.some((id) => !activeSessionPlayerIds.value.has(id));
+    return {
+      ...team,
+      memberIds,
+      memberNames,
+      displayName: memberNames.length ? memberNames.join(" + ") : team.name || "Team",
+      missingMembers,
+      status: resolveTeamStatus(memberIds, missingMembers, team.disabled)
+    };
+  });
+});
+
+const filteredTeamOptions = computed(() => {
+  if (!teamSearch.value.trim()) return teamOptions.value;
+  const term = teamSearch.value.trim().toLowerCase();
+  return teamOptions.value.filter((team) => {
+    if ((team.displayName || "").toLowerCase().includes(term)) return true;
+    if (team.memberNames?.some((name) => name.toLowerCase().includes(term))) return true;
+    return false;
+  });
+});
+
+const teamOptionMap = computed(() => new Map(teamOptions.value.map((team) => [team.id, team])));
 
 function isReadyForPresent(sp) {
   if (!sp) return false;
@@ -670,6 +954,84 @@ function clearSelection() {
   selectedIds.value = [];
 }
 
+function toggleTeamSelection(team) {
+  if (!sessionIsOpen.value) return;
+  if (!team || isTeamDisabled(team)) return;
+  if (selectedTeamIds.value.includes(team.id)) {
+    selectedTeamIds.value = selectedTeamIds.value.filter((id) => id !== team.id);
+    return;
+  }
+  if (selectedTeamIds.value.length >= 2) return;
+  selectedTeamIds.value = [...selectedTeamIds.value, team.id];
+}
+
+function clearTeamSelection() {
+  selectedTeamIds.value = [];
+}
+
+function clearTeamSearch() {
+  teamSearch.value = "";
+}
+
+function teamNameById(id) {
+  return teamOptionMap.value.get(id)?.displayName || "Team";
+}
+
+function isTeamDisabled(team) {
+  if (!team) return true;
+  if (!sessionIsOpen.value) return true;
+  if (team.disabled) return true;
+  if (!team.memberIds || team.memberIds.length < 2) return true;
+  if (team.missingMembers) return true;
+  return false;
+}
+
+function resolveTeamStatus(memberIds, missingMembers, disabled) {
+  if (!memberIds || memberIds.length < 2) return "";
+  if (missingMembers || disabled) return "";
+  const key = teamKey(memberIds);
+  if (playingTeamKeys.value.has(key)) return "Playing";
+  if (queuedTeamKeys.value.has(key)) return "Queued";
+  return "";
+}
+
+function buildAutoTeams(players) {
+  const teams = [];
+  for (let i = 0; i < players.length; i += 2) {
+    const first = players[i];
+    const second = players[i + 1];
+    if (!first) break;
+    if (second) {
+      const memberIds = [first.id, second.id];
+      teams.push(buildTeam(memberIds, `${first.name} + ${second.name}`, { source: "auto" }));
+    } else {
+      const memberIds = [first.id];
+      teams.push(
+        buildTeam(memberIds, `${first.name} + BYE`, {
+          disabled: true,
+          source: "auto",
+          teamKeyOverride: teamKey([first.id, `bye-${first.id}`])
+        })
+      );
+    }
+  }
+  return teams;
+}
+
+function buildTeam(memberIds, name, options = {}) {
+  return {
+    id: options.teamKeyOverride || teamKey(memberIds),
+    name,
+    memberIds,
+    disabled: Boolean(options.disabled),
+    source: options.source
+  };
+}
+
+function teamKey(ids) {
+  return ids.slice().sort().join("+");
+}
+
 async function load() {
   players.value = await api.listPlayers();
   let currentSession = null;
@@ -693,6 +1055,8 @@ async function load() {
     queueEntries.value = [];
     sessionPlayers.value = [];
     matches.value = [];
+    manualTeams.value = [];
+    selectedTeamIds.value = [];
     return;
   }
 
@@ -705,6 +1069,7 @@ async function load() {
   queueEntries.value = queueResult.status === "fulfilled" ? queueResult.value : [];
   sessionPlayers.value = playersResult.status === "fulfilled" ? playersResult.value : [];
   matches.value = matchesResult.status === "fulfilled" ? matchesResult.value : [];
+  manualTeams.value = sessionGameType.value === "doubles" ? loadManualTeams(currentSession.id) : [];
 }
 
 async function addPlayer() {
@@ -855,6 +1220,90 @@ function formatTime(timestamp) {
   return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function parseScoreValue(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function matchScore(match, teamNumber) {
+  if (!match) return null;
+  const score = extractScore(match.scoreJson);
+  if (!score) return null;
+  return teamNumber === 1 ? score.team1 ?? null : score.team2 ?? null;
+}
+
+function extractScore(scoreJson) {
+  if (!scoreJson) return null;
+  if (Array.isArray(scoreJson)) {
+    if (scoreJson.length === 2 && scoreJson.every((v) => typeof v === "number")) {
+      return { team1: scoreJson[0], team2: scoreJson[1] };
+    }
+    if (scoreJson.every((v) => Array.isArray(v) && v.length >= 2)) {
+      const totals = scoreJson.reduce(
+        (acc, set) => {
+          const [a, b] = set;
+          return {
+            team1: acc.team1 + (Number(a) || 0),
+            team2: acc.team2 + (Number(b) || 0)
+          };
+        },
+        { team1: 0, team2: 0 }
+      );
+      return totals;
+    }
+  }
+  if (typeof scoreJson === "object") {
+    const value = (key) => {
+      const raw = scoreJson?.[key];
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : undefined;
+    };
+    const team1 =
+      value("team1") ??
+      value("teamA") ??
+      value("score1") ??
+      value("home") ??
+      value("a");
+    const team2 =
+      value("team2") ??
+      value("teamB") ??
+      value("score2") ??
+      value("away") ??
+      value("b");
+    if (team1 != null || team2 != null) {
+      return { team1, team2 };
+    }
+    if (Array.isArray(scoreJson.scores) && scoreJson.scores.length >= 2) {
+      const [a, b] = scoreJson.scores;
+      const team1Score = Number(a);
+      const team2Score = Number(b);
+      if (Number.isFinite(team1Score) || Number.isFinite(team2Score)) {
+        return {
+          team1: Number.isFinite(team1Score) ? team1Score : undefined,
+          team2: Number.isFinite(team2Score) ? team2Score : undefined
+        };
+      }
+      return null;
+    }
+    if (Array.isArray(scoreJson.sets) && scoreJson.sets.length) {
+      const totals = scoreJson.sets.reduce(
+        (acc, set) => {
+          const a = Number(set?.team1 ?? set?.teamA ?? set?.score1 ?? set?.a ?? 0);
+          const b = Number(set?.team2 ?? set?.teamB ?? set?.score2 ?? set?.b ?? 0);
+          return {
+            team1: acc.team1 + (Number.isFinite(a) ? a : 0),
+            team2: acc.team2 + (Number.isFinite(b) ? b : 0)
+          };
+        },
+        { team1: 0, team2: 0 }
+      );
+      return totals;
+    }
+  }
+  return null;
+}
+
 const historyOrderMap = computed(() => {
   const sorted = [...matches.value].sort((a, b) => {
     const aTime = a.startedAt ? new Date(a.startedAt).getTime() : 0;
@@ -927,12 +1376,37 @@ function closeEditPlayer() {
   editError.value = "";
 }
 
+function openEditResult(match) {
+  if (!match || match.status !== "ended") return;
+  editResultError.value = "";
+  editResultMatchId.value = match.id;
+  editResultTeams.value = {
+    teamA: teamNames(match, 1) || "—",
+    teamB: teamNames(match, 2) || "—"
+  };
+  const score = extractScore(match.scoreJson);
+  editResultScoreA.value = score?.team1 ?? "";
+  editResultScoreB.value = score?.team2 ?? "";
+  showEditResult.value = true;
+}
+
+function closeEditResult() {
+  showEditResult.value = false;
+  editResultMatchId.value = "";
+  editResultTeams.value = { teamA: "—", teamB: "—" };
+  editResultScoreA.value = "";
+  editResultScoreB.value = "";
+  editResultError.value = "";
+}
+
 function hasDuplicateSelection(order = selectedIds.value) {
   return order.some((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId));
 }
 
 function openDuplicateWarning(order = selectedIds.value) {
   pendingQueueOrder.value = order.slice();
+  pendingQueueMode.value = "players";
+  pendingQueueTeams.value = [];
   duplicateWarningNames.value = order
     .filter((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId))
     .map((id) => players.value.find((p) => p.id === id))
@@ -945,18 +1419,38 @@ function closeDuplicateWarning() {
   showDuplicateWarning.value = false;
   duplicateWarningNames.value = [];
   pendingQueueOrder.value = null;
+  pendingQueueTeams.value = [];
+  pendingQueueMode.value = "players";
 }
 
 async function confirmDuplicateWarning() {
   showDuplicateWarning.value = false;
   try {
-    await enqueueSelectedPlayers(pendingQueueOrder.value || selectedIds.value);
+    if (pendingQueueMode.value === "teams") {
+      await enqueueSelectedTeams(pendingQueueTeams.value);
+    } else {
+      await enqueueSelectedPlayers(pendingQueueOrder.value || selectedIds.value);
+    }
   } catch (err) {
     queueError.value = err.message || "Unable to add to queue";
   } finally {
     duplicateWarningNames.value = [];
     pendingQueueOrder.value = null;
+    pendingQueueTeams.value = [];
+    pendingQueueMode.value = "players";
   }
+}
+
+function openDuplicateWarningForTeams(playerIds, teamIds) {
+  pendingQueueOrder.value = playerIds.slice();
+  pendingQueueMode.value = "teams";
+  pendingQueueTeams.value = teamIds.slice();
+  duplicateWarningNames.value = playerIds
+    .filter((playerId) => queuedIds.value.has(playerId) || playingIds.value.has(playerId))
+    .map((id) => players.value.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p) => p.nickname || p.fullName);
+  showDuplicateWarning.value = true;
 }
 
 async function enqueueSelectedPlayers(order = selectedIds.value) {
@@ -972,6 +1466,21 @@ async function enqueueSelectedPlayers(order = selectedIds.value) {
     }
   }
   selectedIds.value = [];
+  await load();
+}
+
+async function enqueueSelectedTeams(teamIds = selectedTeamIds.value) {
+  if (!session.value || sessionGameType.value !== "doubles") return;
+  const teamMap = new Map(teamOptions.value.map((team) => [team.id, team]));
+  const teams = teamIds.map((id) => teamMap.get(id)).filter(Boolean);
+  const allPlayers = teams.flatMap((team) => team.memberIds || []);
+  if (!allPlayers.length) return;
+  await ensureCheckedIn(allPlayers);
+  for (const team of teams) {
+    if (!team.memberIds || team.memberIds.length < 2) continue;
+    await api.enqueue(session.value.id, { type: "doubles", playerIds: team.memberIds });
+  }
+  selectedTeamIds.value = [];
   await load();
 }
 
@@ -1030,6 +1539,16 @@ function closePairingModal() {
   pairingSelectedIndex.value = null;
 }
 
+function openTeamQueueModal() {
+  teamQueueOrder.value = selectedTeamIds.value.slice(0, 2);
+  showTeamQueueModal.value = true;
+}
+
+function closeTeamQueueModal() {
+  showTeamQueueModal.value = false;
+  teamQueueOrder.value = [];
+}
+
 async function confirmPairingAdd() {
   if (!session.value || pairingOrder.value.length !== 4) return;
   showPairingModal.value = false;
@@ -1042,6 +1561,39 @@ async function confirmPairingAdd() {
     draggingPairIndex.value = null;
     pairingHoverIndex.value = null;
     pairingSelectedIndex.value = null;
+  }
+}
+
+async function confirmTeamQueueAdd() {
+  if (!session.value || teamQueueOrder.value.length !== 2) return;
+  showTeamQueueModal.value = false;
+  try {
+    await attemptQueueTeams(teamQueueOrder.value);
+  } catch (err) {
+    queueError.value = err.message || "Unable to add teams to queue";
+  } finally {
+    teamQueueOrder.value = [];
+  }
+}
+
+async function saveEditedResult(winnerTeam) {
+  if (!session.value || !editResultMatchId.value) return;
+  editResultError.value = "";
+  try {
+    const payload = { matchId: editResultMatchId.value, winnerTeam };
+    const scoreA = parseScoreValue(editResultScoreA.value);
+    const scoreB = parseScoreValue(editResultScoreB.value);
+    if (scoreA != null || scoreB != null) {
+      const score = {};
+      if (scoreA != null) score.team1 = scoreA;
+      if (scoreB != null) score.team2 = scoreB;
+      payload.score = score;
+    }
+    await api.updateMatchResult(session.value.id, payload);
+    closeEditResult();
+    await load();
+  } catch (err) {
+    editResultError.value = err.message || "Unable to update match result";
   }
 }
 
@@ -1196,6 +1748,71 @@ async function attemptQueue(order) {
   await enqueueSelectedPlayers(order);
 }
 
+async function addSelectedTeams() {
+  if (!session.value || !sessionIsOpen.value) {
+    queueError.value = "Session is not open.";
+    return;
+  }
+  queueError.value = "";
+  const teamMap = new Map(teamOptions.value.map((team) => [team.id, team]));
+  const teams = selectedTeamIds.value.map((id) => teamMap.get(id)).filter(Boolean);
+  if (teams.length !== 2) {
+    queueError.value = "Select 2 teams.";
+    return;
+  }
+  if (!showTeamQueueModal.value) {
+    openTeamQueueModal();
+    return;
+  }
+  await attemptQueueTeams(selectedTeamIds.value);
+}
+
+async function attemptQueueTeams(teamIds) {
+  if (!session.value || !sessionIsOpen.value) {
+    queueError.value = "Session is not open.";
+    return;
+  }
+  const teamMap = new Map(teamOptions.value.map((team) => [team.id, team]));
+  const teams = teamIds.map((id) => teamMap.get(id)).filter(Boolean);
+  if (teams.length !== 2) {
+    queueError.value = "Select 2 teams.";
+    return;
+  }
+  const invalid = teams.some((team) => isTeamDisabled(team));
+  if (invalid) {
+    queueError.value = "One or more teams are missing players.";
+    return;
+  }
+  const playerIds = teams.flatMap((team) => team.memberIds || []);
+  if (hasDuplicateSelection(playerIds)) {
+    openDuplicateWarningForTeams(playerIds, teams.map((team) => team.id));
+    return;
+  }
+  try {
+    await enqueueSelectedTeams(teams.map((team) => team.id));
+  } catch (err) {
+    queueError.value = err.message || "Unable to add teams to queue";
+  }
+}
+
+watch(
+  () => selectedTeamIds.value.join("|"),
+  (signature) => {
+    if (sessionGameType.value !== "doubles") return;
+    if (selectionTab.value !== "teams") return;
+    if (selectedTeamIds.value.length !== 2) {
+      if (showTeamQueueModal.value) closeTeamQueueModal();
+      lastTeamQueueSignature.value = "";
+      return;
+    }
+    if (showTeamQueueModal.value) return;
+    if (signature && signature !== lastTeamQueueSignature.value) {
+      lastTeamQueueSignature.value = signature;
+      openTeamQueueModal();
+    }
+  }
+);
+
 watch(
   () => selectedIds.value.join("|"),
   (signature) => {
@@ -1221,16 +1838,21 @@ watch(
   }
 );
 
-watch([showPairingModal, showSinglesQueueModal], ([pairingOpen, singlesOpen]) => {
-  document.body.style.overflow = pairingOpen || singlesOpen ? "hidden" : "";
-  if (!pairingOpen) {
-    cleanupPairDrag();
+watch(
+  [showPairingModal, showSinglesQueueModal, showTeamQueueModal, showEditResult],
+  ([pairingOpen, singlesOpen, teamOpen, editOpen]) => {
+    document.body.style.overflow = pairingOpen || singlesOpen || teamOpen || editOpen ? "hidden" : "";
+    if (!pairingOpen) {
+      cleanupPairDrag();
+    }
   }
-});
+);
 
 watch(sessionIsOpen, (isOpen) => {
   if (!isOpen) {
     selectedIds.value = [];
+    selectedTeamIds.value = [];
+    teamSearch.value = "";
     if (timerId) {
       clearInterval(timerId);
       timerId = null;
@@ -1268,11 +1890,32 @@ watch(sessionGameType, () => {
   selectedIds.value = [];
   lastSinglesSignature.value = "";
   lastPairingSignature.value = "";
+  lastTeamQueueSignature.value = "";
+  if (sessionGameType.value !== "doubles") {
+    selectedTeamIds.value = [];
+    manualTeams.value = [];
+    teamSearch.value = "";
+    selectionTab.value = "players";
+    return;
+  }
+  if (session.value?.id) {
+    manualTeams.value = loadManualTeams(session.value.id);
+  }
 });
 
 watch(selectedSessionId, () => {
   selectedIds.value = [];
+  selectedTeamIds.value = [];
+  teamSearch.value = "";
+  lastTeamQueueSignature.value = "";
+  selectionTab.value = "players";
+  closeEditResult();
   load();
+});
+
+watch(teamOptions, (teams) => {
+  const ids = new Set(teams.map((team) => team.id));
+  selectedTeamIds.value = selectedTeamIds.value.filter((id) => ids.has(id));
 });
 
 onMounted(() => {

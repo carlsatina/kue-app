@@ -213,6 +213,7 @@ function createManualTeam() {
     buildTeam(memberIds, name, { source: "manual" })
   ];
   selectedTeamPlayers.value = [];
+  persistManualTeams();
 }
 
 function requestTeamConfirm() {
@@ -236,11 +237,13 @@ function removeTeam(index) {
   const teamToRemove = teamPreview.value[index];
   if (!teamToRemove || teamToRemove.source !== "manual") return;
   manualTeams.value = manualTeams.value.filter((team) => team.id !== teamToRemove.id);
+  persistManualTeams();
 }
 
 function clearTeams() {
   manualTeams.value = [];
   selectedTeamPlayers.value = [];
+  persistManualTeams();
 }
 
 function autoPairTeams() {
@@ -249,6 +252,7 @@ function autoPairTeams() {
     source: "manual"
   }));
   selectedTeamPlayers.value = [];
+  persistManualTeams();
 }
 
 function buildTeamEntrants(players, customTeams) {
@@ -295,6 +299,11 @@ function buildTeam(memberIds, name, options = {}) {
 
 function teamKey(ids) {
   return ids.slice().sort().join("+");
+}
+
+function persistManualTeams() {
+  if (!session.value?.id) return;
+  saveManualTeams(session.value.id, manualTeams.value);
 }
 
 watch(

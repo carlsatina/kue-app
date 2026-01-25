@@ -172,7 +172,12 @@ router.get("/queue/:token/bracket", async (req, res) => {
   });
 
   res.json({
-    session: { id: session.id, name: session.name, gameType: session.gameType },
+    session: {
+      id: session.id,
+      name: session.name,
+      gameType: session.gameType,
+      defaultBracketType: session.defaultBracketType
+    },
     players: sessionPlayers,
     matches,
     overrides
@@ -220,7 +225,12 @@ router.get("/queue/:token", async (req, res) => {
   });
 
   res.json({
-    session: { id: session.id, name: session.name, gameType: session.gameType },
+    session: {
+      id: session.id,
+      name: session.name,
+      gameType: session.gameType,
+      defaultBracketType: session.defaultBracketType
+    },
     courts,
     queue: queueEntries
   });
