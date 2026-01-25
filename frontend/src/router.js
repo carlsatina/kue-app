@@ -12,6 +12,8 @@ import JoinSession from "./pages/JoinSession.vue";
 import Tournament from "./pages/Tournament.vue";
 import TeamBuilder from "./pages/TeamBuilder.vue";
 import Profile from "./pages/Profile.vue";
+import CheckEmail from "./pages/CheckEmail.vue";
+import VerifyEmail from "./pages/VerifyEmail.vue";
 
 const routes = [
   { path: "/login", component: Login, meta: { public: true } },
@@ -20,6 +22,8 @@ const routes = [
   { path: "/q/:token", component: PublicQueue, meta: { public: true } },
   { path: "/join/:token", component: JoinSession, meta: { public: true } },
   { path: "/board/:sessionId", component: PublicBoard, meta: { public: true } },
+  { path: "/check-email", component: CheckEmail, meta: { public: true } },
+  { path: "/verify", component: VerifyEmail, meta: { public: true } },
   { path: "/", component: Dashboard },
   { path: "/players", component: Players },
   { path: "/rankings", component: Rankings },

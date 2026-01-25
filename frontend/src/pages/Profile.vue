@@ -70,6 +70,7 @@ const initials = computed(() => {
 
 function logout() {
   localStorage.removeItem("token");
+  window.dispatchEvent(new Event("auth:changed"));
   router.push("/login");
 }
 </script>

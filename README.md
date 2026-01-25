@@ -45,6 +45,10 @@ Backend `.env`:
 - `PORT`
 - `ADMIN_EMAIL` (seed)
 - `ADMIN_PASSWORD` (seed)
+- `RESEND_API_KEY` (email verification)
+- `RESEND_FROM` (e.g. `Kue <no-reply@yourdomain.com>`)
+- `APP_BASE_URL` (frontend base URL for verify links)
+- `EMAIL_VERIFY_TTL_HOURS` (optional, default 24)
 
 Frontend `.env`:
 - `VITE_API_URL` (default `http://localhost:4000/api`)

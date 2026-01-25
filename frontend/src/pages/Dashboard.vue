@@ -38,7 +38,9 @@
         <div class="kpi" style="margin-bottom: 8px;">
           <div class="section-title">Courts</div>
           <div class="inline-actions">
-            <button class="button ghost button-compact" @click="createInviteLink">Create Join Link</button>
+            <button class="button button-compact join-link-button" @click="createInviteLink">
+              Create Join Link
+            </button>
             <button class="button ghost" @click="showAddCourt = true">Add Court</button>
           </div>
         </div>

@@ -23,6 +23,7 @@ async function request(path, options = {}) {
 export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
+  verifyEmail: (token) => request(`/auth/verify?token=${encodeURIComponent(token)}`),
   activeSession: () => request("/sessions/active"),
   listSessions: (status) => request(`/sessions${status ? `?status=${status}` : ""}`),
   session: (id) => request(`/sessions/${id}`),

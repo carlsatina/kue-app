@@ -91,7 +91,11 @@ import { pendingSessionId, selectedSessionId, setPendingSessionId, setSelectedSe
 
 const route = useRoute();
 
-const authed = computed(() => Boolean(localStorage.getItem("token")));
+const authTick = ref(0);
+const authed = computed(() => {
+  authTick.value;
+  return Boolean(localStorage.getItem("token"));
+});
 const showProfile = computed(() => authed.value && !route.meta.public);
 const showNav = computed(() => !route.meta.public && authed.value);
 const sessions = ref([]);
@@ -135,6 +139,10 @@ function handleSessionsUpdated() {
   loadSessions();
 }
 
+function handleAuthChanged() {
+  authTick.value += 1;
+}
+
 watch(
   () => route.fullPath,
   () => {
@@ -154,9 +162,13 @@ watch(authed, (isAuthed) => {
 onMounted(() => {
   loadSessions();
   document.addEventListener("sessions:updated", handleSessionsUpdated);
+  window.addEventListener("auth:changed", handleAuthChanged);
+  window.addEventListener("storage", handleAuthChanged);
 });
 
 onUnmounted(() => {
   document.removeEventListener("sessions:updated", handleSessionsUpdated);
+  window.removeEventListener("auth:changed", handleAuthChanged);
+  window.removeEventListener("storage", handleAuthChanged);
 });
 </script>
