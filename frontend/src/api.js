@@ -24,6 +24,10 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   verifyEmail: (token) => request(`/auth/verify?token=${encodeURIComponent(token)}`),
+  requestPasswordReset: (payload) =>
+    request("/auth/password/forgot", { method: "POST", body: JSON.stringify(payload) }),
+  resetPassword: (payload) =>
+    request("/auth/password/reset", { method: "POST", body: JSON.stringify(payload) }),
   activeSession: () => request("/sessions/active"),
   listSessions: (status) => request(`/sessions${status ? `?status=${status}` : ""}`),
   session: (id) => request(`/sessions/${id}`),

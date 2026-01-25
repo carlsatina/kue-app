@@ -4,7 +4,12 @@ import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { signToken } from "../utils/jwt.js";
-import { generateVerificationToken, sendVerificationEmail } from "../services/email.js";
+import {
+  generateResetToken,
+  generateVerificationToken,
+  sendPasswordResetEmail,
+  sendVerificationEmail
+} from "../services/email.js";
 
 const router = express.Router();
 
@@ -21,6 +26,15 @@ const loginSchema = z.object({
 
 const verifySchema = z.object({
   token: z.string().min(10)
+});
+
+const resetRequestSchema = z.object({
+  email: z.string().email()
+});
+
+const resetSchema = z.object({
+  token: z.string().min(10),
+  password: z.string().min(6)
 });
 
 async function ensureRoles() {
@@ -159,6 +173,61 @@ router.get("/verify", async (req, res) => {
   });
 
   return res.json({ verified: true });
+});
+
+router.post("/password/forgot", async (req, res) => {
+  const parse = resetRequestSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+
+  const { email } = parse.data;
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    return res.json({ status: "ok" });
+  }
+
+  const { token, tokenHash, expiresAt } = generateResetToken();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetTokenHash: tokenHash,
+      passwordResetTokenExpiresAt: expiresAt
+    }
+  });
+
+  await sendPasswordResetEmail({ to: user.email, token });
+  return res.json({ status: "ok" });
+});
+
+router.post("/password/reset", async (req, res) => {
+  const parse = resetSchema.safeParse(req.body);
+  if (!parse.success) {
+    return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
+  }
+  const { token, password } = parse.data;
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetTokenHash: tokenHash,
+      passwordResetTokenExpiresAt: { gt: new Date() }
+    }
+  });
+  if (!user) {
+    return res.status(400).json({ error: "Reset link is invalid or expired" });
+  }
+
+  const passwordHash = await hashPassword(password);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetTokenHash: null,
+      passwordResetTokenExpiresAt: null
+    }
+  });
+
+  return res.json({ status: "ok" });
 });
 
 export default router;

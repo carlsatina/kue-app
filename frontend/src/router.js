@@ -14,6 +14,8 @@ import TeamBuilder from "./pages/TeamBuilder.vue";
 import Profile from "./pages/Profile.vue";
 import CheckEmail from "./pages/CheckEmail.vue";
 import VerifyEmail from "./pages/VerifyEmail.vue";
+import ForgotPassword from "./pages/ForgotPassword.vue";
+import ResetPassword from "./pages/ResetPassword.vue";
 
 const routes = [
   { path: "/login", component: Login, meta: { public: true } },
@@ -24,6 +26,8 @@ const routes = [
   { path: "/board/:sessionId", component: PublicBoard, meta: { public: true } },
   { path: "/check-email", component: CheckEmail, meta: { public: true } },
   { path: "/verify", component: VerifyEmail, meta: { public: true } },
+  { path: "/forgot-password", component: ForgotPassword, meta: { public: true } },
+  { path: "/reset-password", component: ResetPassword, meta: { public: true } },
   { path: "/", component: Dashboard },
   { path: "/players", component: Players },
   { path: "/rankings", component: Rankings },

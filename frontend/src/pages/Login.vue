@@ -23,6 +23,9 @@
       New here? <router-link to="/register">Create an account</router-link>
     </div>
     <div class="subtitle">
+      Forgot password? <router-link to="/forgot-password">Reset it</router-link>
+    </div>
+    <div class="subtitle">
       Haven’t verified yet? <router-link to="/check-email">Check email</router-link>
     </div>
     <div v-if="error" class="notice">{{ error }}</div>
