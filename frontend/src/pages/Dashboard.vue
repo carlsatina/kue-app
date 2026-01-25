@@ -454,7 +454,7 @@ async function refresh() {
     if (!sessionData) {
       session.value = null;
       courts.value = [];
-      pastSessions.value = await api.listSessions("closed");
+      await loadPastSessions();
       regularJoinLimit.value = 0;
       newJoinerLimit.value = 0;
       return;
@@ -481,15 +481,30 @@ async function refresh() {
     );
     session.value = { ...sessionData, courtSessions: sortedCourts };
     courts.value = sortedCourts;
-    pastSessions.value = await api.listSessions("closed");
+    await loadPastSessions();
   } catch {
     session.value = null;
     courts.value = [];
-    pastSessions.value = await api.listSessions("closed");
+    await loadPastSessions();
     regularJoinLimit.value = 0;
     newJoinerLimit.value = 0;
   } finally {
     window.dispatchEvent(new Event("sessions:updated"));
+  }
+}
+
+async function loadPastSessions() {
+  try {
+    const sessions = await api.listSessions();
+    pastSessions.value = (sessions || [])
+      .filter((s) => s.status !== "open")
+      .sort((a, b) => {
+        const aTime = new Date(a.closedAt || a.createdAt || 0).getTime();
+        const bTime = new Date(b.closedAt || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+  } catch {
+    pastSessions.value = [];
   }
 }
 
@@ -562,8 +577,8 @@ async function createSession() {
     await api.openSession(created.id);
     setPendingSessionId(created.id);
     setSelectedSessionId(created.id);
-    showCreateSession.value = false;
     await refresh();
+    showCreateSession.value = false;
   } catch (err) {
     createError.value = err.message || "Unable to create session";
   }

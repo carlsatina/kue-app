@@ -55,15 +55,29 @@
         </nav>
         <div class="session-switcher">
           <div class="session-label">Session</div>
-          <select class="session-select" v-model="sessionSelection" :disabled="sessions.length === 0">
-            <option v-if="sessions.length === 0" value="">No sessions</option>
-            <option v-for="s in sessions" :key="s.id" :value="s.id">
+          <select class="session-select" v-model="sessionSelection" :disabled="liveSessions.length === 0">
+            <option v-if="liveSessions.length === 0" value="">No sessions</option>
+            <option v-for="s in liveSessions" :key="s.id" :value="s.id">
               {{ s.name }} · {{ s.status === "open" ? "Active" : s.status }}
             </option>
           </select>
         </div>
       </div>
-      <button v-if="showLogout" class="button ghost" @click="logout">Logout</button>
+      <router-link v-if="showProfile" class="button ghost button-compact profile-button" to="/profile">
+        <span class="profile-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img">
+            <circle cx="12" cy="8" r="3.5"></circle>
+            <path
+              d="M4.5 19c0-3.2 3.2-5.5 7.5-5.5S19.5 15.8 19.5 19"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            ></path>
+          </svg>
+        </span>
+        Profile
+      </router-link>
     </header>
     <router-view />
   </div>
@@ -71,24 +85,24 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { api } from "./api.js";
 import { pendingSessionId, selectedSessionId, setPendingSessionId, setSelectedSessionId } from "./state/sessionStore.js";
 
 const route = useRoute();
-const router = useRouter();
 
 const authed = computed(() => Boolean(localStorage.getItem("token")));
-const showLogout = computed(() => authed.value && !route.meta.public);
+const showProfile = computed(() => authed.value && !route.meta.public);
 const showNav = computed(() => !route.meta.public && authed.value);
 const sessions = ref([]);
+const liveSessions = computed(() => sessions.value.filter((s) => s.status === "open"));
 
 const sessionSelection = computed({
   get: () => selectedSessionId.value,
   set: (value) => setSelectedSessionId(value)
 });
 
-const activeSessionId = computed(() => sessions.value.find((s) => s.status === "open")?.id || "");
+const activeSessionId = computed(() => liveSessions.value[0]?.id || "");
 
 async function loadSessions() {
   if (!authed.value || route.meta.public) return;
@@ -99,31 +113,26 @@ async function loadSessions() {
     sessions.value = [];
   }
 
-  if (!sessions.value.length) {
+  if (!liveSessions.value.length) {
     setSelectedSessionId("");
     return;
   }
   if (pendingSessionId.value) {
-    const pending = sessions.value.find((s) => s.id === pendingSessionId.value);
+    const pending = liveSessions.value.find((s) => s.id === pendingSessionId.value);
     if (pending) {
       setSelectedSessionId(pending.id);
       setPendingSessionId("");
       return;
     }
   }
-  const exists = sessions.value.some((s) => s.id === selectedSessionId.value);
+  const exists = liveSessions.value.some((s) => s.id === selectedSessionId.value);
   if (!exists) {
-    setSelectedSessionId(activeSessionId.value || sessions.value[0].id);
+    setSelectedSessionId(activeSessionId.value || liveSessions.value[0].id);
   }
 }
 
 function handleSessionsUpdated() {
   loadSessions();
-}
-
-function logout() {
-  localStorage.removeItem("token");
-  router.push("/login");
 }
 
 watch(

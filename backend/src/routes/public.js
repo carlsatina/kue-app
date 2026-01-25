@@ -327,17 +327,31 @@ router.post("/session-invite/:token/register", async (req, res) => {
     return res.status(409).json({ error: "Session is not open" });
   }
 
+  const ownerId = link.session.createdBy || null;
+
   let player = null;
   if (contact) {
-    player = await prisma.player.findFirst({ where: { contact, deletedAt: null } });
+    player = await prisma.player.findFirst({
+      where: {
+        contact,
+        deletedAt: null,
+        ...(ownerId ? { createdBy: ownerId } : {})
+      }
+    });
   }
   if (!player) {
-    player = await prisma.player.findFirst({ where: { fullName, deletedAt: null } });
+    player = await prisma.player.findFirst({
+      where: {
+        fullName,
+        deletedAt: null,
+        ...(ownerId ? { createdBy: ownerId } : {})
+      }
+    });
   }
 
   if (!player) {
     player = await prisma.player.create({
-      data: { fullName, nickname, contact }
+      data: { fullName, nickname, contact, createdBy: ownerId }
     });
   } else if (nickname || contact) {
     player = await prisma.player.update({

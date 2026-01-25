@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { findPlayerForUser, findSessionForUser } from "../utils/access.js";
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ const paymentSchema = z.object({
 
 router.get("/:sessionId/balances", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
-  const session = await prisma.session.findUnique({ where: { id: sessionId } });
+  const session = await findSessionForUser(sessionId, req.user.id);
   if (!session) return res.status(404).json({ error: "Session not found" });
 
   const sessionPlayers = await prisma.sessionPlayer.findMany({
@@ -55,15 +56,22 @@ router.get("/:sessionId/balances", requireAuth, requireRole(["admin", "staff"]),
 
 router.post("/:sessionId", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) return res.status(404).json({ error: "Session not found" });
   const parse = paymentSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
 
+  const player = await findPlayerForUser(parse.data.playerId, req.user.id);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
+
   const payment = await prisma.payment.create({
     data: {
       sessionId,
-      playerId: parse.data.playerId,
+      playerId: player.id,
       amount: parse.data.amount,
       method: parse.data.method,
       note: parse.data.note

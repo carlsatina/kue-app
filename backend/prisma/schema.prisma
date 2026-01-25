@@ -78,6 +78,8 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at")
   roles        UserRole[]
   sessions     Session[]  @relation("SessionCreator")
+  courts       Court[]    @relation("CourtCreator")
+  players      Player[]   @relation("PlayerCreator")
 
   @@map("users")
 }
@@ -161,11 +163,14 @@ model Court {
   name      String
   notes     String?
   active    Boolean        @default(true)
+  createdBy String?        @db.Uuid @map("created_by")
   createdAt DateTime       @default(now()) @map("created_at")
   deletedAt DateTime?      @map("deleted_at")
 
+  creator       User?         @relation("CourtCreator", fields: [createdBy], references: [id])
   courtSessions CourtSession[]
 
+  @@index([createdBy])
   @@map("courts")
 }
 
@@ -192,15 +197,18 @@ model Player {
   nickname  String?
   skillLevel String?        @map("skill_level")
   contact   String?
+  createdBy String?         @db.Uuid @map("created_by")
   createdAt DateTime        @default(now()) @map("created_at")
   deletedAt DateTime?       @map("deleted_at")
 
+  creator        User?          @relation("PlayerCreator", fields: [createdBy], references: [id])
   sessionPlayers    SessionPlayer[]
   queueEntryPlayers QueueEntryPlayer[]
   matchParticipants MatchParticipant[]
   payments          Payment[]
   shareLinks        ShareLink[]
 
+  @@index([createdBy])
   @@map("players")
 }
 

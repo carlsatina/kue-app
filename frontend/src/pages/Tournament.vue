@@ -117,61 +117,74 @@
     </div>
 
     <div class="page-side stack">
-      <div class="card stack live-surface print-hidden">
-        <div class="section-title">Tournament</div>
-        <div v-if="!session" class="subtitle">No active session.</div>
-        <div v-else class="grid two">
-          <div class="field">
-            <label class="field-label">Bracket type</label>
-            <select class="input" v-model="bracketType">
-              <option value="single">Single Elimination</option>
-              <option value="double">Double Elimination</option>
-              <option value="round_robin">Round Robin</option>
-            </select>
-            <label class="radio-row default-bracket-toggle">
-              <input
-                type="checkbox"
-                v-model="defaultBracketEnabled"
-                :disabled="!session"
-                @change="handleDefaultToggle"
-              />
-              Default
-            </label>
+      <div class="card stack live-surface print-hidden tournament-card">
+        <div class="tournament-head">
+          <div>
+            <div class="section-title">Tournament</div>
+            <div class="subtitle compact">Manage bracket settings</div>
           </div>
-          <div class="field">
-            <label class="field-label">Joined players</label>
-            <div class="subtitle">{{ joinedPlayers.length }}</div>
-            <div v-if="matchFormat === 'doubles'" class="subtitle compact">
-              Teams: {{ entrants.length }}
+        </div>
+        <div v-if="!session" class="subtitle">No active session.</div>
+        <div v-else class="tournament-body">
+          <div class="tournament-block">
+            <label class="field-label">Bracket type</label>
+            <div class="tournament-row">
+              <select class="input" v-model="bracketType">
+                <option value="single">Single Elimination</option>
+                <option value="double">Double Elimination</option>
+                <option value="round_robin">Round Robin</option>
+              </select>
+              <label class="radio-row default-bracket-toggle">
+                <input
+                  type="checkbox"
+                  v-model="defaultBracketEnabled"
+                  :disabled="!session"
+                  @change="handleDefaultToggle"
+                />
+                Default
+              </label>
             </div>
           </div>
-          <div class="field">
-            <label class="field-label">Game type</label>
-            <div class="subtitle">{{ matchFormatLabel }}</div>
+
+          <div class="tournament-stats">
+            <div class="tournament-stat">
+              <div class="subtitle">Players</div>
+              <strong>{{ joinedPlayers.length }}</strong>
+            </div>
+            <div v-if="matchFormat === 'doubles'" class="tournament-stat">
+              <div class="subtitle">Teams</div>
+              <strong>{{ entrants.length }}</strong>
+            </div>
+            <div class="tournament-stat">
+              <div class="subtitle">Game type</div>
+              <strong>{{ matchFormatLabel }}</strong>
+            </div>
           </div>
-        </div>
-        <div v-if="session && matchFormat === 'singles'" class="seed-summary">
-          <div>
-            <div class="subtitle">Seeding</div>
-            <strong>{{ seedOrderActive ? "Manual" : "Join order" }}</strong>
+
+          <div v-if="session && matchFormat === 'singles'" class="tournament-tool">
+            <div>
+              <div class="subtitle">Seeding</div>
+              <strong>{{ seedOrderActive ? "Manual" : "Join order" }}</strong>
+            </div>
+            <button class="button ghost button-compact" @click="openSeedModal">Arrange</button>
           </div>
-          <button class="button ghost button-compact" @click="openSeedModal">Arrange</button>
-        </div>
-        <div v-if="session && matchFormat === 'doubles'" class="team-builder-summary">
-          <div>
-            <div class="subtitle">Team Builder</div>
-            <strong>{{ manualTeams.length }} manual teams</strong>
+          <div v-if="session && matchFormat === 'doubles'" class="tournament-tool vertical">
+            <div>
+              <div class="subtitle">Team Builder</div>
+              <strong>{{ manualTeams.length }} manual teams</strong>
+            </div>
+            <router-link class="button button-compact blue-gradient no-wrap" to="/team-builder">
+              Open Team Builder
+            </router-link>
           </div>
-          <router-link class="button ghost button-compact" to="/team-builder">
-            Open Team Builder
-          </router-link>
+
+          <div class="tournament-actions">
+            <button class="button ghost button-compact" @click="load">Refresh</button>
+            <button class="button button-compact" @click="printBracket">Print</button>
+            <button class="button ghost button-compact" @click="exportBracket">Export JSON</button>
+          </div>
+          <div v-if="error" class="notice">{{ error }}</div>
         </div>
-        <div v-if="session" class="tournament-actions">
-          <button class="button ghost button-compact" @click="load">Refresh</button>
-          <button class="button button-compact" @click="printBracket">Print</button>
-          <button class="button ghost button-compact" @click="exportBracket">Export JSON</button>
-        </div>
-        <div v-if="error" class="notice">{{ error }}</div>
       </div>
     </div>
   </div>

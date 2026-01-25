@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { findSessionForUser } from "../utils/access.js";
 
 const router = express.Router();
 
@@ -75,12 +76,18 @@ router.post("/", requireAuth, requireRole(["admin"]), async (req, res) => {
 
 router.post("/:id/open", requireAuth, requireRole(["admin"]), async (req, res) => {
   const { id } = req.params;
+  const owned = await findSessionForUser(id, req.user.id);
+  if (!owned) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const session = await prisma.session.update({
     where: { id },
     data: { status: "open", closedAt: null }
   });
 
-  const activeCourts = await prisma.court.findMany({ where: { active: true, deletedAt: null } });
+  const activeCourts = await prisma.court.findMany({
+    where: { active: true, deletedAt: null, createdBy: req.user.id }
+  });
   await Promise.all(
     activeCourts.map((court) =>
       prisma.courtSession.upsert({
@@ -100,6 +107,10 @@ router.post("/:id/open", requireAuth, requireRole(["admin"]), async (req, res) =
 
 router.post("/:id/close", requireAuth, requireRole(["admin"]), async (req, res) => {
   const { id } = req.params;
+  const owned = await findSessionForUser(id, req.user.id);
+  if (!owned) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const session = await prisma.session.update({
     where: { id },
     data: { status: "closed", closedAt: new Date() }
@@ -109,7 +120,7 @@ router.post("/:id/close", requireAuth, requireRole(["admin"]), async (req, res) 
 
 router.delete("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
   const { id } = req.params;
-  const session = await prisma.session.findUnique({ where: { id } });
+  const session = await findSessionForUser(id, req.user.id);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
@@ -123,7 +134,7 @@ router.delete("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
 
 router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const session = await prisma.session.findFirst({
-    where: { status: "open" },
+    where: { status: "open", createdBy: req.user.id },
     orderBy: { createdAt: "desc" }
   });
   if (!session) {
@@ -160,7 +171,9 @@ router.get("/active", requireAuth, requireRole(["admin", "staff"]), async (req, 
 
 router.get("/", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { status } = req.query;
-  const where = status ? { status: String(status) } : {};
+  const where = status
+    ? { status: String(status), createdBy: req.user.id }
+    : { createdBy: req.user.id };
   const sessions = await prisma.session.findMany({
     where,
     orderBy: { createdAt: "desc" }
@@ -170,9 +183,7 @@ router.get("/", requireAuth, requireRole(["admin", "staff"]), async (req, res) =
 
 router.get("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
-  const session = await prisma.session.findUnique({
-    where: { id }
-  });
+  const session = await findSessionForUser(id, req.user.id);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
@@ -214,7 +225,7 @@ router.patch("/:id/fee", requireAuth, requireRole(["admin"]), async (req, res) =
     return res.status(400).json({ error: "No fee updates provided" });
   }
 
-  const session = await prisma.session.findUnique({ where: { id: req.params.id } });
+  const session = await findSessionForUser(req.params.id, req.user.id);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
@@ -253,7 +264,7 @@ router.patch("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
     return res.status(400).json({ error: "No updates provided" });
   }
 
-  const session = await prisma.session.findUnique({ where: { id } });
+  const session = await findSessionForUser(id, req.user.id);
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
@@ -267,6 +278,10 @@ router.patch("/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
 
 router.get("/:id/players", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
+  const session = await findSessionForUser(id, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const sessionPlayers = await prisma.sessionPlayer.findMany({
     where: { sessionId: id },
     include: { player: true }
@@ -276,6 +291,10 @@ router.get("/:id/players", requireAuth, requireRole(["admin", "staff"]), async (
 
 router.get("/:id/rankings", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
+  const session = await findSessionForUser(id, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const sessionPlayers = await prisma.sessionPlayer.findMany({
     where: { sessionId: id },
     include: { player: true }
@@ -306,6 +325,10 @@ router.get("/:id/rankings", requireAuth, requireRole(["admin", "staff"]), async 
 
 router.get("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
+  const session = await findSessionForUser(id, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = bracketOverrideQuerySchema.safeParse(req.query);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid query", details: parse.error.flatten() });
@@ -324,6 +347,10 @@ router.get("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]
 
 router.post("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
+  const session = await findSessionForUser(id, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = bracketOverrideSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
@@ -356,6 +383,10 @@ router.post("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"
 
 router.delete("/:id/bracket-overrides", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { id } = req.params;
+  const session = await findSessionForUser(id, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = bracketOverrideSchema.pick({
     matchId: true,
     bracketType: true,

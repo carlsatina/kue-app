@@ -131,7 +131,9 @@
                   <div class="subtitle">Team Builder Teams</div>
                   <div class="subtitle compact">Select 2 teams to queue a match.</div>
                 </div>
-                <router-link class="button ghost button-compact" to="/team-builder">Open Team Builder</router-link>
+                <router-link class="button button-compact blue-gradient" to="/team-builder">
+                  Open Team Builder
+                </router-link>
               </div>
               <div v-if="filteredTeamOptions.length === 0" class="subtitle compact">
                 No teams yet.
@@ -582,7 +584,7 @@ const editResultScoreA = ref("");
 const editResultScoreB = ref("");
 const editResultError = ref("");
 
-const skillLevels = ["Beginner", "Intermediate", "Upper Intermediate"];
+const skillLevels = ["Beginner", "Intermediate", "Advance", "Elite"];
 
 const sessionGameType = computed(() => {
   const raw = session.value?.gameType || "doubles";

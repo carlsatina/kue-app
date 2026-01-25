@@ -82,7 +82,7 @@
     </div>
 
     <div class="page-side stack">
-      <div class="card live-surface">
+      <div class="card live-surface team-builder-session-card">
         <div class="section-title">Session</div>
         <div v-if="!session" class="subtitle">No active session.</div>
         <div v-else class="stack">
@@ -99,7 +99,7 @@
             <strong>{{ manualTeams.length }}</strong>
           </div>
         </div>
-        <router-link class="button ghost button-compact" to="/tournament">
+        <router-link class="button button-compact back-bracket-button" to="/tournament">
           Back to Bracket
         </router-link>
       </div>

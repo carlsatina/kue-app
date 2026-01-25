@@ -92,6 +92,25 @@ a {
   font-family: "Manrope", system-ui, sans-serif;
 }
 
+.profile-button {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+}
+
+.profile-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
 .title {
   font-size: 28px;
 }
@@ -1672,6 +1691,12 @@ a {
   border: none;
 }
 
+.button.blue-gradient {
+  background: linear-gradient(135deg, #4f7bff, #2fb1ff);
+  color: #ffffff;
+  box-shadow: 0 10px 18px rgba(47, 177, 255, 0.25);
+}
+
 .history-index {
   font-weight: 700;
   font-size: 12px;
@@ -2548,7 +2573,14 @@ a {
 
 .round-robin-round > .subtitle {
   font-size: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(92, 156, 255, 0.22), rgba(255, 178, 102, 0.22));
+  color: #1f1c17;
+  font-weight: 700;
 }
 
 .match-card {
@@ -2600,6 +2632,7 @@ a {
   .bracket-page .round-robin-round > .subtitle,
   .bracket-modal .round-robin-round > .subtitle {
     font-size: 15px;
+    padding: 5px 12px;
   }
 
   .bracket-page .round-robin .match-line,
@@ -2654,6 +2687,84 @@ a {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.tournament-card {
+  gap: 12px;
+}
+
+.tournament-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tournament-body {
+  display: grid;
+  gap: 12px;
+}
+
+.tournament-block {
+  display: grid;
+  gap: 6px;
+}
+
+.tournament-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tournament-row .input {
+  min-width: 200px;
+  flex: 1 1 220px;
+}
+
+.tournament-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.tournament-stat {
+  padding: 8px 10px;
+  border: 1px solid rgba(214, 200, 184, 0.6);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.85);
+  display: grid;
+  gap: 4px;
+}
+
+.tournament-tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(214, 200, 184, 0.6);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.tournament-tool.vertical {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tournament-tool.vertical .button {
+  align-self: flex-start;
+}
+
+.no-wrap {
+  white-space: nowrap;
+}
+
+@media (min-width: 900px) {
+  .tournament-actions {
+    justify-content: flex-start;
+  }
 }
 
 .team-builder {
@@ -2718,6 +2829,22 @@ a {
   gap: 6px;
   padding: 8px;
   align-content: start;
+}
+
+.team-builder-session-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.back-bracket-button {
+  margin-top: auto;
+  background: linear-gradient(135deg, #ff9a3d, #ff6b4a);
+  color: #fffaf4;
+  border: none;
+  box-shadow: 0 10px 18px rgba(255, 107, 74, 0.25);
+  text-align: center;
+  justify-content: center;
 }
 
 .team-builder-list {
@@ -3309,4 +3436,98 @@ a {
 .score-inputs .input {
   padding: 9px 12px;
   font-size: 13px;
+}
+
+.profile-page {
+  gap: 18px;
+}
+
+.profile-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(230, 244, 241, 0.85), rgba(255, 245, 233, 0.85));
+  border: 1px solid rgba(214, 200, 184, 0.6);
+}
+
+.profile-banner {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 15% 20%, rgba(59, 199, 181, 0.2), transparent 55%),
+    radial-gradient(circle at 80% 30%, rgba(242, 163, 58, 0.22), transparent 60%);
+  opacity: 0.7;
+}
+
+.profile-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 1;
+}
+
+.profile-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #4f7bff, #2fb1ff);
+  box-shadow: 0 12px 20px rgba(47, 177, 255, 0.25);
+}
+
+.profile-details {
+  position: relative;
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+  z-index: 1;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(214, 200, 184, 0.5);
+}
+
+.profile-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.profile-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(214, 200, 184, 0.6);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.profile-logout {
+  min-width: 120px;
+}
+
+.mono {
+  font-family: "Manrope", system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--ink-soft);
 }

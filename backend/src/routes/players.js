@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { findPlayerForUser, findSessionForUser } from "../utils/access.js";
 
 const router = express.Router();
 
@@ -33,7 +34,9 @@ const checkoutSchema = z.object({
 });
 
 router.get("/", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
-  const players = await prisma.player.findMany({ where: { deletedAt: null } });
+  const players = await prisma.player.findMany({
+    where: { deletedAt: null, createdBy: req.user.id }
+  });
   res.json(players);
 });
 
@@ -42,7 +45,9 @@ router.post("/", requireAuth, requireRole(["admin", "staff"]), async (req, res) 
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
-  const player = await prisma.player.create({ data: parse.data });
+  const player = await prisma.player.create({
+    data: { ...parse.data, createdBy: req.user.id }
+  });
   res.json(player);
 });
 
@@ -51,11 +56,15 @@ router.patch("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, r
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
-  const player = await prisma.player.update({
-    where: { id: req.params.id },
+  const player = await findPlayerForUser(req.params.id, req.user.id);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
+  const updated = await prisma.player.update({
+    where: { id: player.id },
     data: parse.data
   });
-  res.json(player);
+  res.json(updated);
 });
 
 router.post("/:id/checkin", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
@@ -64,12 +73,20 @@ router.post("/:id/checkin", requireAuth, requireRole(["admin", "staff"]), async 
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
   const { sessionId } = parse.data;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  const player = await findPlayerForUser(req.params.id, req.user.id);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
   const sessionPlayer = await prisma.sessionPlayer.upsert({
-    where: { sessionId_playerId: { sessionId, playerId: req.params.id } },
+    where: { sessionId_playerId: { sessionId, playerId: player.id } },
     update: { status: "checked_in" },
     create: {
       sessionId,
-      playerId: req.params.id,
+      playerId: player.id,
       status: "checked_in"
     }
   });
@@ -82,12 +99,20 @@ router.post("/:id/present", requireAuth, requireRole(["admin", "staff"]), async 
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
   const { sessionId } = parse.data;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  const player = await findPlayerForUser(req.params.id, req.user.id);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
   const sessionPlayer = await prisma.sessionPlayer.upsert({
-    where: { sessionId_playerId: { sessionId, playerId: req.params.id } },
+    where: { sessionId_playerId: { sessionId, playerId: player.id } },
     update: { status: "present" },
     create: {
       sessionId,
-      playerId: req.params.id,
+      playerId: player.id,
       status: "present"
     }
   });
@@ -100,8 +125,16 @@ router.post("/:id/checkout", requireAuth, requireRole(["admin", "staff"]), async
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
   const { sessionId, status } = parse.data;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+  const player = await findPlayerForUser(req.params.id, req.user.id);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
   const sessionPlayer = await prisma.sessionPlayer.update({
-    where: { sessionId_playerId: { sessionId, playerId: req.params.id } },
+    where: { sessionId_playerId: { sessionId, playerId: player.id } },
     data: { status }
   });
   res.json(sessionPlayer);

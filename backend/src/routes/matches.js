@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { suggestMatch } from "../services/queue.js";
+import { findSessionForUser } from "../utils/access.js";
 
 const router = express.Router();
 
@@ -34,8 +35,8 @@ const cancelSchema = z.object({
 });
 
 router.get("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
-  const match = await prisma.match.findUnique({
-    where: { id: req.params.id },
+  const match = await prisma.match.findFirst({
+    where: { id: req.params.id, session: { createdBy: req.user.id } },
     include: { participants: { include: { player: true } } }
   });
   if (!match) {
@@ -45,6 +46,10 @@ router.get("/:id", requireAuth, requireRole(["admin", "staff"]), async (req, res
 });
 
 router.post("/:sessionId/suggest", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
+  const session = await findSessionForUser(req.params.sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = suggestSchema.safeParse(req.body || {});
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
@@ -59,12 +64,31 @@ router.post("/:sessionId/suggest", requireAuth, requireRole(["admin", "staff"]),
 
 router.post("/:sessionId/start", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = startSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
 
   const { courtSessionId, matchType, teams, entryIds } = parse.data;
+
+  const courtSession = await prisma.courtSession.findFirst({
+    where: { id: courtSessionId, sessionId }
+  });
+  if (!courtSession) {
+    return res.status(404).json({ error: "Court session not found" });
+  }
+
+  const allPlayerIds = teams.flat();
+  const ownedPlayers = await prisma.player.count({
+    where: { id: { in: allPlayerIds }, createdBy: req.user.id, deletedAt: null }
+  });
+  if (ownedPlayers !== allPlayerIds.length) {
+    return res.status(404).json({ error: "Player not found" });
+  }
 
   const match = await prisma.match.create({
     data: {
@@ -108,12 +132,20 @@ router.post("/:sessionId/start", requireAuth, requireRole(["admin", "staff"]), a
 
 router.post("/:sessionId/end", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = endSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
 
   const { matchId, score, winnerTeam } = parse.data;
+  const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!existingMatch || existingMatch.sessionId !== sessionId) {
+    return res.status(404).json({ error: "Match not found" });
+  }
   const match = await prisma.match.update({
     where: { id: matchId },
     data: {
@@ -168,6 +200,10 @@ router.post("/:sessionId/end", requireAuth, requireRole(["admin", "staff"]), asy
 
 router.patch("/:sessionId/result", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = updateResultSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
@@ -244,12 +280,20 @@ router.patch("/:sessionId/result", requireAuth, requireRole(["admin", "staff"]),
 
 router.post("/:sessionId/cancel", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const parse = cancelSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid input", details: parse.error.flatten() });
   }
 
   const { matchId } = parse.data;
+  const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!existingMatch || existingMatch.sessionId !== sessionId) {
+    return res.status(404).json({ error: "Match not found" });
+  }
   const match = await prisma.match.update({
     where: { id: matchId },
     data: {
@@ -269,8 +313,7 @@ router.post("/:sessionId/cancel", requireAuth, requireRole(["admin", "staff"]), 
     });
   }
 
-  const session = await prisma.session.findUnique({ where: { id: sessionId } });
-  if (session?.returnToQueue) {
+  if (session.returnToQueue) {
     const teams = participants.reduce((acc, p) => {
       acc[p.teamNumber - 1].push(p.playerId);
       return acc;
@@ -303,6 +346,10 @@ router.post("/:sessionId/cancel", requireAuth, requireRole(["admin", "staff"]), 
 
 router.get("/:sessionId/history", requireAuth, requireRole(["admin", "staff"]), async (req, res) => {
   const { sessionId } = req.params;
+  const session = await findSessionForUser(sessionId, req.user.id);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found" });
+  }
   const matches = await prisma.match.findMany({
     where: { sessionId, status: { in: ["ended", "cancelled"] } },
     include: { participants: { include: { player: true } } },
