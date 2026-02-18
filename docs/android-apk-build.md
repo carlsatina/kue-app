@@ -5,7 +5,7 @@ This document captures the steps and settings used to generate the debug APK for
 ## App details
 - App name: Kue
 - App id / package name: com.arshii.kue
-- API base URL (production): https://kue-api.arshii.net
+- API base URL (production): https://kue-api.arshii.net/api
 
 ## Files added/updated
 - Capacitor config: `frontend/capacitor.config.json`

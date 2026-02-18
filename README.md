@@ -37,12 +37,20 @@ cp .env.example .env
 npm run dev
 ```
 
+### Version bump (web + Android)
+```bash
+./scripts/bump-version.sh patch
+# or:
+./scripts/bump-version.sh 0.2.0 --code 12
+```
+
 ## Environment
 Backend `.env`:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
 - `PORT`
+- `CORS_ORIGINS` (comma-separated, e.g. `https://kue.arshii.net,https://localhost,capacitor://localhost`)
 - `ADMIN_EMAIL` (seed)
 - `ADMIN_PASSWORD` (seed)
 - `RESEND_API_KEY` (email verification)
