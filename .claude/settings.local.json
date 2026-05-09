@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(grep -l \"modal-backdrop\" /Users/rsatina/Projects/arshii/kue-app/frontend/src/pages/*.vue)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(sed -i '' 's|^<template>$|<template>\\\\n  <div>|' /Users/rsatina/Projects/arshii/kue-app/frontend/src/pages/Register.vue)",
+      "Bash(sed -i '' 's|^</template>$|  </div>\\\\n</template>|' /Users/rsatina/Projects/arshii/kue-app/frontend/src/pages/Register.vue)",
+      "Bash(xargs ls -la)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(npm run *)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(curl -s http://localhost:4000/health)",
+      "Bash(pkill -f \"node src/index.js\")",
+      "Bash(awk '/^<template>/{found=1} found{print NR\": \"$0; if\\(NR>3\\) exit}' /Users/rsatina/Projects/arshii/kue-app/frontend/src/pages/Players.vue)",
+      "Bash(node *)",
+      "Bash(npm ls *)",
+      "Bash(kill %1)"
+    ]
+  }
+}
